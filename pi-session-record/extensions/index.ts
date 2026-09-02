@@ -2,55 +2,36 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { Ajv2020 } from "ajv/dist/2020.js";
+import type { SessionRecord } from "./generated/session-record.js";
 
-interface Rating {
-  outcome: number;
-  rework?: number;
-  autonomy?: number;
-  note?: string;
-  ratedAt: number;
-  source: "command" | "idle-prompt";
-}
+const SCHEMA_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "pi-session-schema",
+  "schema",
+  "session-record.schema.json",
+);
+const recordSchema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8"));
 
-interface SessionRecord {
-  schemaVersion: number;
-  sessionId: string;
-  sessionFile: string;
-  cwd: string;
-  startedAt?: number;
-  endedAt: number;
-  durationMs?: number;
-  endReason: string;
+const ajv = new Ajv2020({
+  allErrors: true,
+  strict: true,
+  strictRequired: false,
+});
+const validateRecord = ajv.compile<SessionRecord>(recordSchema);
 
-  agentVersion: string | null;
-  taskId: string | null;
-  runId: string | null;
-
-  models: Array<{ key: string; assistantMessages: number }>;
-
-  usage: {
-    input: number;
-    output: number;
-    cacheRead: number;
-    cacheWrite: number;
-    costUsd: number;
-    unmeteredMessages: number;
-  };
-
-  activity: {
-    assistantMessages: number;
-    userMessages: number;
-    toolCalls: number;
-    toolErrors: number;
-    byTool: Record<string, number>;
-    compactions: number;
-  };
-
-  outcome: { rated: false } | ({ rated: true } & Rating);
-}
+type Rating = Omit<
+  SessionRecord["outcome"],
+  "rated" | "outcome" | "ratedAt" | "source"
+> &
+  Required<Pick<SessionRecord["outcome"], "outcome" | "ratedAt" | "source">>;
 
 const SCHEMA_VERSION = 1;
 const RECORD_DIR =
@@ -238,6 +219,12 @@ export default function (pi: ExtensionAPI) {
     record.startedAt = firstTimestamp;
     if (firstTimestamp) record.durationMs = record.endedAt - firstTimestamp;
     if (lastRating) record.outcome = { rated: true, ...lastRating };
+
+    if (!validateRecord(record)) {
+      throw new Error(
+        `record failed schema validation: ${ajv.errorsText(validateRecord.errors)}`,
+      );
+    }
 
     await mkdir(RECORD_DIR, { recursive: true });
     await writeFile(

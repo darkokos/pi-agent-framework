@@ -1,8 +1,20 @@
 {
   "name": "pi-session-record",
   "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "generate": "json2ts -i ../pi-session-schema/schema/session-record.schema.json -o extensions/generated/session-record.ts",
+    "prepare": "pnpm run generate",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.4",
+    "ajv": "^8.20.0",
     "typebox": "^1.3.21"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "json-schema-to-typescript": "^16.0.0",
+    "typescript": "^7.0.2"
   }
 }
