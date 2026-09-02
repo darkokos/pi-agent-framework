@@ -1,0 +1,6 @@
+/pi-session-schema/go/session_record.go
+**/node_modules/
+**/dist/
+/pi-agent-lab/bin/
+/pi-agent-lab/pi-agent-lab
+/herdr-pi-agent-lab/bin/

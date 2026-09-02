@@ -1,0 +1,9 @@
+{
+  "name": "pi-session-schema",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Canonical JSON Schema for the pi-session-record SessionRecord format. Single source of truth — consumers derive types/validation from schema/session-record.schema.json, never redeclare the shape.",
+  "files": [
+    "schema/session-record.schema.json"
+  ]
+}

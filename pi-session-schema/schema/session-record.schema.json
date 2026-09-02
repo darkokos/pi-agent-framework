@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/darkokos/pi-session-schema/session-record.schema.json",
+  "title": "SessionRecord",
+  "description": "One record per Pi session, written by pi-session-record on session_shutdown. Canonical source of truth for this shape — do not hand-declare it again in any consuming language.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sessionId",
+    "sessionFile",
+    "cwd",
+    "endedAt",
+    "endReason",
+    "agentVersion",
+    "taskId",
+    "runId",
+    "models",
+    "usage",
+    "activity",
+    "outcome"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Bump this and the schema together when the shape changes; never widen silently."
+    },
+    "sessionId": { "type": "string" },
+    "sessionFile": { "type": "string" },
+    "cwd": { "type": "string" },
+    "startedAt": { "type": "number" },
+    "endedAt": { "type": "number" },
+    "durationMs": { "type": "number" },
+    "endReason": { "type": "string" },
+    "agentVersion": {
+      "type": ["string", "null"],
+      "description": "Set via PI_AGENT_VERSION env var by an external orchestrator; Pi itself does not set this."
+    },
+    "taskId": {
+      "type": ["string", "null"],
+      "description": "Set via PI_TASK_ID env var. Records sharing a taskId are comparable — the primary grouping key for pi-agent-lab."
+    },
+    "runId": {
+      "type": ["string", "null"],
+      "description": "Set via PI_RUN_ID env var."
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "assistantMessages"],
+        "properties": {
+          "key": { "type": "string" },
+          "assistantMessages": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "output", "cacheRead", "cacheWrite", "costUsd", "unmeteredMessages"],
+      "properties": {
+        "input": { "type": "number", "minimum": 0 },
+        "output": { "type": "number", "minimum": 0 },
+        "cacheRead": { "type": "number", "minimum": 0 },
+        "cacheWrite": { "type": "number", "minimum": 0 },
+        "costUsd": { "type": "number", "minimum": 0 },
+        "unmeteredMessages": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assistantMessages", "userMessages", "toolCalls", "toolErrors", "byTool", "compactions"],
+      "properties": {
+        "assistantMessages": { "type": "integer", "minimum": 0 },
+        "userMessages": { "type": "integer", "minimum": 0 },
+        "toolCalls": { "type": "integer", "minimum": 0 },
+        "toolErrors": { "type": "integer", "minimum": 0 },
+        "byTool": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "compactions": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "outcome": {
+      "description": "Human rating across three axes (outcome/rework/autonomy), entered via /rate or the idle prompt. rated:false means not yet judged and must not enter a ranked comparison; rated:true guarantees outcome/ratedAt/source are present (enforced below, not via oneOf — a discriminated oneOf here degrades to an untyped union in Go codegen, whereas Go has no native sum type anyway, so a single flat object with an optional-fields-when-rated shape is both more idiomatic and matches how the ranking logic actually consumes it: check Rated, then read fields).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rated"],
+      "properties": {
+        "rated": { "type": "boolean" },
+        "outcome": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "rework": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "autonomy": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "note": { "type": "string" },
+        "ratedAt": { "type": "number" },
+        "source": { "enum": ["command", "idle-prompt"] }
+      },
+      "if": {
+        "properties": { "rated": { "const": true } },
+        "required": ["rated"]
+      },
+      "then": {
+        "required": ["outcome", "ratedAt", "source"]
+      }
+    }
+  }
+}
