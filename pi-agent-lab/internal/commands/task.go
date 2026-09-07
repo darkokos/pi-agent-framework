@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/darkokos/pi-agent-framework/pi-agent-lab/internal/store"
 )
 
 func NewTaskCommand() *cobra.Command {
@@ -25,7 +27,14 @@ func newTaskCreateCommand() *cobra.Command {
 		Short: "Register a new task (standardized input)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented: task create %s (--prompt-file %q --notes %q)", args[0], promptFile, notes)
+			task, err := store.CreateTask(args[0], promptFile, notes)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "created task %q\n", task.ID)
+
+			return nil
 		},
 	}
 

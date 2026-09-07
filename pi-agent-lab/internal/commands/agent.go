@@ -4,7 +4,17 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/darkokos/pi-agent-framework/pi-agent-lab/internal/store"
 )
+
+var validToolsModes = map[string]bool{
+	"all":          true,
+	"none":         true,
+	"builtin-only": true,
+	"allowlist":    true,
+	"denylist":     true,
+}
 
 func NewAgentCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -26,7 +36,14 @@ func newAgentCreateCommand() *cobra.Command {
 		Short: "Register a new agent",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented: agent create %s (--name %q --description %q)", args[0], name, description)
+			agent, err := store.CreateAgent(args[0], name, description)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "created agent %q\n", agent.ID)
+
+			return nil
 		},
 	}
 
@@ -38,11 +55,17 @@ func newAgentCreateCommand() *cobra.Command {
 
 func newAgentVersionCommand() *cobra.Command {
 	var (
-		systemPromptFile string
-		model            string
-		provider         string
-		thinking         string
-		notes            string
+		systemPromptFile  string
+		model             string
+		provider          string
+		thinking          string
+		notes             string
+		toolsMode         string
+		toolNames         []string
+		extensionsIsolate bool
+		extensionPaths    []string
+		skillsIsolate     bool
+		skillPaths        []string
 	)
 
 	cmd := &cobra.Command{
@@ -50,10 +73,36 @@ func newAgentVersionCommand() *cobra.Command {
 		Short: "Add a new version to an existing agent",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf(
-				"not yet implemented: agent version %s %s (--system-prompt-file %q --model %q --provider %q --thinking %q --notes %q)",
-				args[0], args[1], systemPromptFile, model, provider, thinking, notes,
-			)
+			if !validToolsModes[toolsMode] {
+				return fmt.Errorf("--tools-mode must be one of all|none|builtin-only|allowlist|denylist, got %q", toolsMode)
+			}
+
+			version, err := store.CreateAgentVersion(args[0], args[1], store.AgentVersionInput{
+				SystemPromptFile: systemPromptFile,
+				Model:            model,
+				Provider:         provider,
+				Thinking:         thinking,
+				Notes:            notes,
+				Tools: store.ToolsConfig{
+					Mode:  toolsMode,
+					Names: toolNames,
+				},
+				Extensions: store.ResourceIsolation{
+					Isolate: extensionsIsolate,
+					Paths:   extensionPaths,
+				},
+				Skills: store.ResourceIsolation{
+					Isolate: skillsIsolate,
+					Paths:   skillPaths,
+				},
+			})
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "created version %q for agent %q\n", version.VersionID, version.AgentID)
+
+			return nil
 		},
 	}
 
@@ -62,6 +111,12 @@ func newAgentVersionCommand() *cobra.Command {
 	cmd.Flags().StringVar(&provider, "provider", "", "provider name")
 	cmd.Flags().StringVar(&thinking, "thinking", "", "thinking level: off|minimal|low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
+	cmd.Flags().StringVar(&toolsMode, "tools-mode", "all", "all|none|builtin-only|allowlist|denylist")
+	cmd.Flags().StringSliceVar(&toolNames, "tools", nil, "comma-separated tool names, used with --tools-mode allowlist|denylist")
+	cmd.Flags().BoolVar(&extensionsIsolate, "extensions-isolate", false, "pass --no-extensions and pin only --extension paths given below (pi-session-record is re-added automatically, see show)")
+	cmd.Flags().StringArrayVar(&extensionPaths, "extension", nil, "extension path to load under isolation, repeatable")
+	cmd.Flags().BoolVar(&skillsIsolate, "skills-isolate", false, "pass --no-skills and pin only --skill paths given below")
+	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "skill path to load under isolation, repeatable")
 	_ = cmd.MarkFlagRequired("system-prompt-file")
 	_ = cmd.MarkFlagRequired("model")
 
