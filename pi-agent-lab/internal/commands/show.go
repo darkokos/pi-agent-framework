@@ -2,9 +2,72 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/darkokos/pi-agent-framework/pi-agent-lab/internal/store"
 )
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+func buildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath string, version *store.AgentVersion) (string, error) {
+	parts := []string{
+		"PI_AGENT_VERSION=" + shellQuote(agentID+"@"+versionID),
+		"PI_TASK_ID=" + shellQuote(taskID),
+		"PI_RUN_ID=$(uuidgen)",
+		"pi", "-p",
+		"--model", shellQuote(version.Model),
+	}
+
+	if version.Provider != "" {
+		parts = append(parts, "--provider", shellQuote(version.Provider))
+	}
+	if version.Thinking != "" {
+		parts = append(parts, "--thinking", shellQuote(version.Thinking))
+	}
+
+	switch version.Tools.Mode {
+	case "", "all":
+	case "none":
+		parts = append(parts, "--no-tools")
+	case "extensions-only":
+		parts = append(parts, "--no-builtin-tools")
+	case "allowlist":
+		parts = append(parts, "--tools", shellQuote(strings.Join(version.Tools.Names, ",")))
+	case "denylist":
+		parts = append(parts, "--exclude-tools", shellQuote(strings.Join(version.Tools.Names, ",")))
+	default:
+		return "", fmt.Errorf("unknown tools mode %q", version.Tools.Mode)
+	}
+
+	if version.Extensions.Isolate {
+		parts = append(parts, "--no-extensions")
+		for _, p := range version.Extensions.Paths {
+			parts = append(parts, "-e", shellQuote(p))
+		}
+	}
+
+	if version.Skills.Isolate {
+		parts = append(parts, "--no-skills")
+		for _, p := range version.Skills.Paths {
+			parts = append(parts, "--skill", shellQuote(p))
+		}
+	}
+
+	systemPromptFlag := "--system-prompt"
+	if version.SystemPrompt.Mode == "append" {
+		systemPromptFlag = "--append-system-prompt"
+	}
+
+	parts = append(parts, systemPromptFlag, shellQuote(systemPrompt))
+
+	parts = append(parts, shellQuote("@"+taskPromptPath))
+
+	return strings.Join(parts, " "), nil
+}
 
 func NewShowCommand() *cobra.Command {
 	return &cobra.Command{
@@ -12,7 +75,40 @@ func NewShowCommand() *cobra.Command {
 		Short: "Print (never run) the pi invocation for an agent version + task",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("not yet implemented: show %s %s", args[0], args[1])
+			agentID, versionID, ok := strings.Cut(args[0], "@")
+			if !ok {
+				return fmt.Errorf("expected <agent-id>@<version-id>, got %q", args[0])
+			}
+
+			taskID := args[1]
+
+			version, err := store.GetAgentVersion(agentID, versionID)
+			if err != nil {
+				return err
+			}
+
+			if _, err := store.GetTask(taskID); err != nil {
+				return err
+			}
+
+			systemPrompt, err := store.ReadVersionSystemPrompt(agentID, versionID)
+			if err != nil {
+				return err
+			}
+
+			taskPromptPath, err := store.TaskPromptPath(taskID)
+			if err != nil {
+				return err
+			}
+
+			line, err := buildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath, version)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), line)
+
+			return nil
 		},
 	}
 }

@@ -9,11 +9,11 @@ import (
 )
 
 var validToolsModes = map[string]bool{
-	"all":          true,
-	"none":         true,
-	"builtin-only": true,
-	"allowlist":    true,
-	"denylist":     true,
+	"all":             true,
+	"none":            true,
+	"extensions-only": true,
+	"allowlist":       true,
+	"denylist":        true,
 }
 
 func NewAgentCommand() *cobra.Command {
@@ -74,7 +74,7 @@ func newAgentVersionCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !validToolsModes[toolsMode] {
-				return fmt.Errorf("--tools-mode must be one of all|none|builtin-only|allowlist|denylist, got %q", toolsMode)
+				return fmt.Errorf("--tools-mode must be one of all|none|extensions-only|allowlist|denylist, got %q", toolsMode)
 			}
 
 			version, err := store.CreateAgentVersion(args[0], args[1], store.AgentVersionInput{
@@ -111,7 +111,7 @@ func newAgentVersionCommand() *cobra.Command {
 	cmd.Flags().StringVar(&provider, "provider", "", "provider name")
 	cmd.Flags().StringVar(&thinking, "thinking", "", "thinking level: off|minimal|low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
-	cmd.Flags().StringVar(&toolsMode, "tools-mode", "all", "all|none|builtin-only|allowlist|denylist")
+	cmd.Flags().StringVar(&toolsMode, "tools-mode", "all", "all|none|extensions-only|allowlist|denylist")
 	cmd.Flags().StringSliceVar(&toolNames, "tools", nil, "comma-separated tool names, used with --tools-mode allowlist|denylist")
 	cmd.Flags().BoolVar(&extensionsIsolate, "extensions-isolate", false, "pass --no-extensions and pin only --extension paths given below (pi-session-record is re-added automatically, see show)")
 	cmd.Flags().StringArrayVar(&extensionPaths, "extension", nil, "extension path to load under isolation, repeatable")

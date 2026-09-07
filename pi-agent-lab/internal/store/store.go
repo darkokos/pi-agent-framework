@@ -26,6 +26,52 @@ func writeJSON(path string, v any) error {
 	return os.WriteFile(path, append(data, '\n'), 0o644)
 }
 
+func GetAgentVersion(agentID, versionID string) (*AgentVersion, error) {
+	file, err := versionFile(agentID, versionID)
+	if err != nil {
+		return nil, err
+	}
+
+	var version AgentVersion
+	if err := readJSON(file, &version); err != nil {
+		return nil, fmt.Errorf("version %q of agent %q not found: %w", versionID, agentID, err)
+	}
+
+	return &version, nil
+}
+
+func GetTask(taskID string) (*Task, error) {
+	file, err := taskFile(taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	var task Task
+	if err := readJSON(file, &task); err != nil {
+		return nil, fmt.Errorf("task %q not found: %w", taskID, err)
+	}
+
+	return &task, nil
+}
+
+func ReadVersionSystemPrompt(agentID, versionID string) (string, error) {
+	file, err := versionSystemPromptFile(agentID, versionID)
+	if err != nil {
+		return "", err
+	}
+
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return "", err
+	}
+
+	return string(content), nil
+}
+
+func TaskPromptPath(taskID string) (string, error) {
+	return taskPromptFile(taskID)
+}
+
 func CreateAgent(id, name, description string) (*Agent, error) {
 	file, err := agentFile(id)
 	if err != nil {
