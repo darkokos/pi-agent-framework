@@ -15,7 +15,7 @@ func main() {
 		startupErr = fmt.Errorf("PI_AGENT_REGISTRY_DIR must be set to the pi-agent-lab registry directory")
 	}
 
-	p := tea.NewProgram(tui.NewModel(startupErr))
+	p := tea.NewProgram(tui.NewModel(startupErr), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 
