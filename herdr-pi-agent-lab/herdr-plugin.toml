@@ -19,7 +19,7 @@ command = ["./bin/pi-agent-lab-pane"]
 id = "open-compare"
 title = "Open Pi Agent Lab"
 contexts = ["workspace"]
-command = ["./bin/pi-agent-lab-pane"]
+command = ["herdr", "plugin", "pane", "open", "--plugin", "darkokos.pi-agent-lab", "--entrypoint", "compare"]
 
 [[keys.command]]
 key = "prefix+g"

@@ -10,13 +10,12 @@ import (
 )
 
 func main() {
+	var startupErr error
 	if os.Getenv("PI_AGENT_REGISTRY_DIR") == "" {
-		fmt.Fprintln(os.Stderr, "PI_AGENT_REGISTRY_DIR must be set to the pi-agent-lab registry directory")
-
-		os.Exit(1)
+		startupErr = fmt.Errorf("PI_AGENT_REGISTRY_DIR must be set to the pi-agent-lab registry directory")
 	}
 
-	p := tea.NewProgram(tui.NewModel())
+	p := tea.NewProgram(tui.NewModel(startupErr))
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 

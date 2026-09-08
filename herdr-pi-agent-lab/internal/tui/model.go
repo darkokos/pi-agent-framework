@@ -31,6 +31,7 @@ type Model struct {
 	cursor  int
 	view    view
 	err     error
+	fatal   bool
 	loading bool
 }
 
@@ -42,7 +43,11 @@ type errMsg struct{ err error }
 
 type tickMsg struct{}
 
-func NewModel() Model {
+func NewModel(startupErr error) Model {
+	if startupErr != nil {
+		return Model{err: startupErr, fatal: true}
+	}
+
 	return Model{loading: true}
 }
 
@@ -75,10 +80,22 @@ func tick() tea.Cmd {
 }
 
 func (m Model) Init() tea.Cmd {
+	if m.fatal {
+		return nil
+	}
+
 	return tea.Batch(loadData, tick())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.fatal {
+		if key, ok := msg.(tea.KeyMsg); ok && (key.String() == "q" || key.String() == "ctrl+c") {
+			return m, tea.Quit
+		}
+
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tickMsg:
 		return m, tea.Batch(loadData, tick())
@@ -226,6 +243,12 @@ func (m Model) View() string {
 	if m.err != nil {
 		b.WriteString(errStyle.Render(fmt.Sprintf("error: %v", m.err)))
 		b.WriteString("\n\n")
+	}
+
+	if m.fatal {
+		b.WriteString(helpStyle.Render("q quit"))
+
+		return b.String()
 	}
 
 	if m.loading && len(m.rows) == 0 {
