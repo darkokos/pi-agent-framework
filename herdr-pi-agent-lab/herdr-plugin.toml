@@ -1,0 +1,28 @@
+id = "darkokos.pi-agent-lab"
+name = "Pi Agent Lab"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "Compare Pi agent versions run against the same standardized task"
+platforms = ["macos", "linux"]
+
+[[build]]
+command = ["./scripts/build.sh"]
+platforms = ["macos", "linux"]
+
+[[panes]]
+id = "compare"
+title = "Pi Agent Lab"
+placement = "tab"
+command = ["./bin/pi-agent-lab-pane"]
+
+[[actions]]
+id = "open-compare"
+title = "Open Pi Agent Lab"
+contexts = ["workspace"]
+command = ["./bin/pi-agent-lab-pane"]
+
+[[keys.command]]
+key = "prefix+g"
+type = "plugin_action"
+command = "darkokos.pi-agent-lab.open-compare"
+description = "open pi agent lab comparison"
