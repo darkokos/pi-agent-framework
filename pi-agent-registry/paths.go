@@ -1,16 +1,9 @@
-package store
+package registry
 
-import (
-	"os"
-	"path/filepath"
-)
-
-func root() (string, error) {
-	return os.Getwd()
-}
+import "path/filepath"
 
 func agentsDir() (string, error) {
-	r, err := root()
+	r, err := Root()
 	if err != nil {
 		return "", err
 	}
@@ -19,7 +12,7 @@ func agentsDir() (string, error) {
 }
 
 func tasksDir() (string, error) {
-	r, err := root()
+	r, err := Root()
 	if err != nil {
 		return "", err
 	}

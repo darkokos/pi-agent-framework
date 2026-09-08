@@ -1,4 +1,4 @@
-package store
+package registry
 
 type Agent struct {
 	ID          string   `json:"id"`
@@ -14,7 +14,7 @@ type SystemPromptRef struct {
 }
 
 type ToolsConfig struct {
-	Mode  string   `json:"mode"` // "all" | "none" | "builtin-only" | "allowlist" | "denylist"
+	Mode  string   `json:"mode"` // "all" | "none" | "extensions-only" | "allowlist" | "denylist"
 	Names []string `json:"names,omitempty"`
 }
 
@@ -42,15 +42,4 @@ type Task struct {
 	PromptFile string `json:"promptFile"`
 	Notes      string `json:"notes,omitempty"`
 	CreatedAt  int64  `json:"createdAt"`
-}
-
-type AgentVersionInput struct {
-	SystemPromptFile string
-	Model            string
-	Provider         string
-	Thinking         string
-	Notes            string
-	Tools            ToolsConfig
-	Extensions       ResourceIsolation
-	Skills           ResourceIsolation
 }

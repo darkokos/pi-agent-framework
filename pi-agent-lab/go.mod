@@ -5,7 +5,8 @@ go 1.26.5
 require github.com/spf13/cobra v1.10.2
 
 require (
-	github.com/darkokos/pi-agent-framework/pi-agent-compare v0.0.0-00010101000000-000000000000 // indirect
+	github.com/darkokos/pi-agent-framework/pi-agent-compare v0.0.0-00010101000000-000000000000
+	github.com/darkokos/pi-agent-framework/pi-agent-registry v0.0.0-00010101000000-000000000000
 	github.com/darkokos/pi-agent-framework/pi-session-schema v0.0.0-00010101000000-000000000000 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
@@ -16,3 +17,5 @@ require (
 replace github.com/darkokos/pi-agent-framework/pi-session-schema => ../pi-session-schema
 
 replace github.com/darkokos/pi-agent-framework/pi-agent-compare => ../pi-agent-compare
+
+replace github.com/darkokos/pi-agent-framework/pi-agent-registry => ../pi-agent-registry

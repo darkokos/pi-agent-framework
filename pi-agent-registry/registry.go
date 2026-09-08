@@ -1,4 +1,4 @@
-package store
+package registry
 
 import (
 	"encoding/json"
@@ -24,6 +24,20 @@ func writeJSON(path string, v any) error {
 	}
 
 	return os.WriteFile(path, append(data, '\n'), 0o644)
+}
+
+func GetAgent(agentID string) (*Agent, error) {
+	file, err := agentFile(agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	var agent Agent
+	if err := readJSON(file, &agent); err != nil {
+		return nil, fmt.Errorf("agent %q not found: %w", agentID, err)
+	}
+
+	return &agent, nil
 }
 
 func GetAgentVersion(agentID, versionID string) (*AgentVersion, error) {
@@ -104,15 +118,21 @@ func CreateAgent(id, name, description string) (*Agent, error) {
 	return agent, nil
 }
 
+type AgentVersionInput struct {
+	SystemPromptFile string
+	Model            string
+	Provider         string
+	Thinking         string
+	Notes            string
+	Tools            ToolsConfig
+	Extensions       ResourceIsolation
+	Skills           ResourceIsolation
+}
+
 func CreateAgentVersion(agentID, versionID string, in AgentVersionInput) (*AgentVersion, error) {
-	aFile, err := agentFile(agentID)
+	agent, err := GetAgent(agentID)
 	if err != nil {
 		return nil, err
-	}
-
-	var agent Agent
-	if err := readJSON(aFile, &agent); err != nil {
-		return nil, fmt.Errorf("agent %q not found: %w", agentID, err)
 	}
 
 	vFile, err := versionFile(agentID, versionID)
@@ -165,7 +185,11 @@ func CreateAgentVersion(agentID, versionID string, in AgentVersionInput) (*Agent
 	}
 
 	agent.Versions = append(agent.Versions, versionID)
-	if err := writeJSON(aFile, &agent); err != nil {
+	aFile, err := agentFile(agentID)
+	if err != nil {
+		return nil, err
+	}
+	if err := writeJSON(aFile, agent); err != nil {
 		return nil, err
 	}
 

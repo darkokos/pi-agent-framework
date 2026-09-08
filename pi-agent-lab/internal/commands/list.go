@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/darkokos/pi-agent-framework/pi-agent-compare"
-	"github.com/darkokos/pi-agent-framework/pi-agent-lab/internal/store"
+	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
 func strOrDash(p *string) string {
@@ -61,7 +61,7 @@ func NewListCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			switch args[0] {
 			case "agents":
-				agents, err := store.ListAgents()
+				agents, err := registry.ListAgents()
 				if err != nil {
 					return err
 				}
@@ -72,7 +72,7 @@ func NewListCommand() *cobra.Command {
 
 				return nil
 			case "tasks":
-				tasks, err := store.ListTasks()
+				tasks, err := registry.ListTasks()
 				if err != nil {
 					return err
 				}
@@ -83,7 +83,7 @@ func NewListCommand() *cobra.Command {
 
 				return nil
 			case "runs":
-				records, err := store.ListRecords()
+				records, err := registry.ListRecords()
 				if err != nil {
 					return err
 				}

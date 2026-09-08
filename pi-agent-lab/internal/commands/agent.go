@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/darkokos/pi-agent-framework/pi-agent-lab/internal/store"
+	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
 var validToolsModes = map[string]bool{
@@ -36,7 +36,7 @@ func newAgentCreateCommand() *cobra.Command {
 		Short: "Register a new agent",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			agent, err := store.CreateAgent(args[0], name, description)
+			agent, err := registry.CreateAgent(args[0], name, description)
 			if err != nil {
 				return err
 			}
@@ -77,21 +77,21 @@ func newAgentVersionCommand() *cobra.Command {
 				return fmt.Errorf("--tools-mode must be one of all|none|extensions-only|allowlist|denylist, got %q", toolsMode)
 			}
 
-			version, err := store.CreateAgentVersion(args[0], args[1], store.AgentVersionInput{
+			version, err := registry.CreateAgentVersion(args[0], args[1], registry.AgentVersionInput{
 				SystemPromptFile: systemPromptFile,
 				Model:            model,
 				Provider:         provider,
 				Thinking:         thinking,
 				Notes:            notes,
-				Tools: store.ToolsConfig{
+				Tools: registry.ToolsConfig{
 					Mode:  toolsMode,
 					Names: toolNames,
 				},
-				Extensions: store.ResourceIsolation{
+				Extensions: registry.ResourceIsolation{
 					Isolate: extensionsIsolate,
 					Paths:   extensionPaths,
 				},
-				Skills: store.ResourceIsolation{
+				Skills: registry.ResourceIsolation{
 					Isolate: skillsIsolate,
 					Paths:   skillPaths,
 				},

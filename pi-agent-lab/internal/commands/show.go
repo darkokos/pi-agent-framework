@@ -6,14 +6,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/darkokos/pi-agent-framework/pi-agent-lab/internal/store"
+	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-func buildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath string, version *store.AgentVersion) (string, error) {
+func buildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath string, version *registry.AgentVersion) (string, error) {
 	parts := []string{
 		"PI_AGENT_VERSION=" + shellQuote(agentID+"@"+versionID),
 		"PI_TASK_ID=" + shellQuote(taskID),
@@ -82,21 +82,21 @@ func NewShowCommand() *cobra.Command {
 
 			taskID := args[1]
 
-			version, err := store.GetAgentVersion(agentID, versionID)
+			version, err := registry.GetAgentVersion(agentID, versionID)
 			if err != nil {
 				return err
 			}
 
-			if _, err := store.GetTask(taskID); err != nil {
+			if _, err := registry.GetTask(taskID); err != nil {
 				return err
 			}
 
-			systemPrompt, err := store.ReadVersionSystemPrompt(agentID, versionID)
+			systemPrompt, err := registry.ReadVersionSystemPrompt(agentID, versionID)
 			if err != nil {
 				return err
 			}
 
-			taskPromptPath, err := store.TaskPromptPath(taskID)
+			taskPromptPath, err := registry.TaskPromptPath(taskID)
 			if err != nil {
 				return err
 			}
