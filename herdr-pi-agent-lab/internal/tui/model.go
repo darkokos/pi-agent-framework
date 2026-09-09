@@ -5,11 +5,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/darkokos/pi-agent-framework/pi-agent-compare"
-	"github.com/darkokos/pi-agent-framework/pi-agent-registry"
+	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
 const pollInterval = 3 * time.Second
@@ -19,6 +20,7 @@ type view int
 const (
 	viewList view = iota
 	viewDetail
+	viewOverridePrompt
 )
 
 type taskRow struct {
@@ -27,82 +29,87 @@ type taskRow struct {
 }
 
 type Model struct {
-	rows    []taskRow
-	cursor  int
-	view    view
-	err     error
-	fatal   bool
-	loading bool
+	rows          []taskRow
+	cursor        int
+	view          view
+	err           error
+	loading       bool
+	resolvedRoot  string
+	overrideRoot  *string
+	overrideInput textinput.Model
+}
+
+func NewModel() Model {
+	ti := textinput.New()
+	ti.Placeholder = "path to registry (empty clears override)"
+
+	return Model{loading: true, overrideInput: ti}
 }
 
 type dataMsg struct {
 	rows []taskRow
+	root string
 }
 
 type errMsg struct{ err error }
 
 type tickMsg struct{}
 
-func NewModel(startupErr error) Model {
-	if startupErr != nil {
-		return Model{err: startupErr, fatal: true}
-	}
-
-	return Model{loading: true}
-}
-
-func loadData() tea.Msg {
-	tasks, err := registry.ListTasks()
-	if err != nil {
-		return errMsg{err}
-	}
-
-	records, err := registry.ListRecords()
-	if err != nil {
-		return errMsg{err}
-	}
-
-	groupsByTask := map[string]*compare.TaskGroup{}
-	for _, g := range compare.GroupByTask(records) {
-		groupsByTask[g.TaskID] = g
-	}
-
-	rows := make([]taskRow, 0, len(tasks))
-	for _, t := range tasks {
-		rows = append(rows, taskRow{task: t, group: groupsByTask[t.ID]})
-	}
-
-	return dataMsg{rows: rows}
-}
-
 func tick() tea.Cmd {
 	return tea.Tick(pollInterval, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
-func (m Model) Init() tea.Cmd {
-	if m.fatal {
-		return nil
-	}
+func loadData(overrideRoot *string) tea.Cmd {
+	return func() tea.Msg {
+		root := ""
+		if overrideRoot != nil {
+			root = *overrideRoot
+		} else {
+			resolved, err := registry.ResolveRoot()
+			if err != nil {
+				return errMsg{err}
+			}
 
-	return tea.Batch(loadData, tick())
+			root = resolved
+		}
+
+		tasks, err := registry.ListTasks(root)
+		if err != nil {
+			return errMsg{err}
+		}
+
+		records, err := registry.ListRecords()
+		if err != nil {
+			return errMsg{err}
+		}
+
+		groupsByTask := map[string]*compare.TaskGroup{}
+		for _, g := range compare.GroupByTask(records) {
+			groupsByTask[g.TaskID] = g
+		}
+
+		rows := make([]taskRow, 0, len(tasks))
+		for _, t := range tasks {
+			rows = append(rows, taskRow{task: t, group: groupsByTask[t.ID]})
+		}
+
+		return dataMsg{rows: rows, root: root}
+	}
+}
+
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(loadData(m.overrideRoot), tick())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if m.fatal {
-		if key, ok := msg.(tea.KeyMsg); ok && (key.String() == "q" || key.String() == "ctrl+c") {
-			return m, tea.Quit
-		}
-
-		return m, nil
-	}
-
 	switch msg := msg.(type) {
 	case tickMsg:
-		return m, tea.Batch(loadData, tick())
+		return m, tea.Batch(loadData(m.overrideRoot), tick())
 	case dataMsg:
 		m.loading = false
 		m.err = nil
 		m.rows = msg.rows
+		m.resolvedRoot = msg.root
 		if m.cursor >= len(m.rows) {
 			m.cursor = max(0, len(m.rows)-1)
 		}
@@ -121,6 +128,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.view == viewOverridePrompt {
+		switch msg.String() {
+		case "esc":
+			m.view = viewList
+
+			return m, nil
+		case "enter":
+			value := strings.TrimSpace(m.overrideInput.Value())
+			if value == "" {
+				m.overrideRoot = nil
+			} else {
+				m.overrideRoot = &value
+			}
+
+			m.view = viewList
+			m.loading = true
+
+			return m, loadData(m.overrideRoot)
+		}
+
+		var cmd tea.Cmd
+		m.overrideInput, cmd = m.overrideInput.Update(msg)
+
+		return m, cmd
+	}
+
 	switch msg.String() {
 	case "ctrl+c", "q":
 		return m, tea.Quit
@@ -139,6 +172,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "backspace":
 		if m.view == viewDetail {
 			m.view = viewList
+		}
+	case "o":
+		if m.view == viewList {
+			if m.overrideRoot != nil {
+				m.overrideInput.SetValue(*m.overrideRoot)
+			} else {
+				m.overrideInput.SetValue("")
+			}
+
+			m.overrideInput.CursorEnd()
+			m.view = viewOverridePrompt
+
+			return m, m.overrideInput.Focus()
 		}
 	}
 
@@ -238,6 +284,15 @@ func (m Model) View() string {
 	var b strings.Builder
 
 	b.WriteString(headerStyle.Render("Pi Agent Lab"))
+	if m.resolvedRoot != "" {
+		suffix := ""
+		if m.overrideRoot != nil {
+			suffix = " (override)"
+		}
+
+		b.WriteString(dimStyle.Render(" - " + m.resolvedRoot + suffix))
+	}
+
 	b.WriteString("\n\n")
 
 	if m.err != nil {
@@ -245,14 +300,18 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 	}
 
-	if m.fatal {
-		b.WriteString(helpStyle.Render("q quit"))
+	if m.view == viewOverridePrompt {
+		b.WriteString("Registry path (empty clears override):\n")
+		b.WriteString(m.overrideInput.View())
+		b.WriteString("\n\n")
+		b.WriteString(helpStyle.Render("enter confirm  esc cancel"))
 
 		return b.String()
 	}
 
 	if m.loading && len(m.rows) == 0 {
 		b.WriteString("loading...\n")
+
 		return b.String()
 	}
 
@@ -264,7 +323,7 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("j/k move  enter open  esc back  q quit"))
+	b.WriteString(helpStyle.Render("j/k move  enter open  o override registry  esc back  q quit"))
 
 	return b.String()
 }

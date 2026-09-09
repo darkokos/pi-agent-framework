@@ -2,83 +2,34 @@ package registry
 
 import "path/filepath"
 
-func agentsDir() (string, error) {
-	r, err := Root()
-	if err != nil {
-		return "", err
-	}
+func agentsDir(root string) string { return filepath.Join(root, "agents") }
 
-	return filepath.Join(r, "agents"), nil
+func tasksDir(root string) string { return filepath.Join(root, "tasks") }
+
+func agentDir(root, agentID string) string {
+	return filepath.Join(agentsDir(root), agentID)
 }
 
-func tasksDir() (string, error) {
-	r, err := Root()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(r, "tasks"), nil
+func agentFile(root, agentID string) string {
+	return filepath.Join(agentDir(root, agentID), "agent.json")
 }
 
-func agentDir(agentID string) (string, error) {
-	d, err := agentsDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(d, agentID), nil
+func versionsDir(root, agentID string) string {
+	return filepath.Join(agentDir(root, agentID), "versions")
 }
 
-func agentFile(agentID string) (string, error) {
-	d, err := agentDir(agentID)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(d, "agent.json"), nil
+func versionFile(root, agentID, versionID string) string {
+	return filepath.Join(versionsDir(root, agentID), versionID+".json")
 }
 
-func versionsDir(agentID string) (string, error) {
-	d, err := agentDir(agentID)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(d, "versions"), nil
+func versionSystemPromptFile(root, agentID, versionID string) string {
+	return filepath.Join(versionsDir(root, agentID), versionID+".system.md")
 }
 
-func versionFile(agentID, versionID string) (string, error) {
-	d, err := versionsDir(agentID)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(d, versionID+".json"), nil
+func taskFile(root, taskID string) string {
+	return filepath.Join(tasksDir(root), taskID+".json")
 }
 
-func versionSystemPromptFile(agentID, versionID string) (string, error) {
-	d, err := versionsDir(agentID)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(d, versionID+".system.md"), nil
-}
-
-func taskFile(taskID string) (string, error) {
-	d, err := tasksDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(d, taskID+".json"), nil
-}
-
-func taskPromptFile(taskID string) (string, error) {
-	d, err := tasksDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(d, taskID+".prompt.md"), nil
+func taskPromptFile(root, taskID string) string {
+	return filepath.Join(tasksDir(root), taskID+".prompt.md")
 }

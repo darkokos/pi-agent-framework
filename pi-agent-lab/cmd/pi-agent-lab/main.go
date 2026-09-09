@@ -19,6 +19,7 @@ func main() {
 	root.AddCommand(commands.NewTaskCommand())
 	root.AddCommand(commands.NewListCommand())
 	root.AddCommand(commands.NewShowCommand())
+	root.AddCommand(commands.NewConfigCommand())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

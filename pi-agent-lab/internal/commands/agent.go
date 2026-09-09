@@ -36,7 +36,12 @@ func newAgentCreateCommand() *cobra.Command {
 		Short: "Register a new agent",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			agent, err := registry.CreateAgent(args[0], name, description)
+			root, err := registry.ResolveRoot()
+			if err != nil {
+				return err
+			}
+
+			agent, err := registry.CreateAgent(root, args[0], name, description)
 			if err != nil {
 				return err
 			}
@@ -77,7 +82,12 @@ func newAgentVersionCommand() *cobra.Command {
 				return fmt.Errorf("--tools-mode must be one of all|none|extensions-only|allowlist|denylist, got %q", toolsMode)
 			}
 
-			version, err := registry.CreateAgentVersion(args[0], args[1], registry.AgentVersionInput{
+			root, err := registry.ResolveRoot()
+			if err != nil {
+				return err
+			}
+
+			version, err := registry.CreateAgentVersion(root, args[0], args[1], registry.AgentVersionInput{
 				SystemPromptFile: systemPromptFile,
 				Model:            model,
 				Provider:         provider,

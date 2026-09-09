@@ -24,7 +24,6 @@ func TestLoadData_AssociatesGroupsWithRegisteredTasks(t *testing.T) {
 	registryDir := t.TempDir()
 	recordsDir := t.TempDir()
 
-	t.Setenv("PI_AGENT_REGISTRY_DIR", registryDir)
 	t.Setenv("PI_SESSION_RECORDS", recordsDir)
 
 	tasksDir := filepath.Join(registryDir, "tasks")
@@ -51,8 +50,7 @@ func TestLoadData_AssociatesGroupsWithRegisteredTasks(t *testing.T) {
 		"outcome": map[string]any{"rated": true, "outcome": 5, "rework": 5, "autonomy": 5, "ratedAt": 1, "source": "command"},
 	})
 
-	msg := loadData()
-
+	msg := loadData(&registryDir)()
 	data, ok := msg.(dataMsg)
 	if !ok {
 		t.Fatalf("expected dataMsg, got %#v", msg)

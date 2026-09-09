@@ -26,55 +26,35 @@ func writeJSON(path string, v any) error {
 	return os.WriteFile(path, append(data, '\n'), 0o644)
 }
 
-func GetAgent(agentID string) (*Agent, error) {
-	file, err := agentFile(agentID)
-	if err != nil {
-		return nil, err
-	}
-
+func GetAgent(root, agentID string) (*Agent, error) {
 	var agent Agent
-	if err := readJSON(file, &agent); err != nil {
+	if err := readJSON(agentFile(root, agentID), &agent); err != nil {
 		return nil, fmt.Errorf("agent %q not found: %w", agentID, err)
 	}
 
 	return &agent, nil
 }
 
-func GetAgentVersion(agentID, versionID string) (*AgentVersion, error) {
-	file, err := versionFile(agentID, versionID)
-	if err != nil {
-		return nil, err
-	}
-
+func GetAgentVersion(root, agentID, versionID string) (*AgentVersion, error) {
 	var version AgentVersion
-	if err := readJSON(file, &version); err != nil {
+	if err := readJSON(versionFile(root, agentID, versionID), &version); err != nil {
 		return nil, fmt.Errorf("version %q of agent %q not found: %w", versionID, agentID, err)
 	}
 
 	return &version, nil
 }
 
-func GetTask(taskID string) (*Task, error) {
-	file, err := taskFile(taskID)
-	if err != nil {
-		return nil, err
-	}
-
+func GetTask(root, taskID string) (*Task, error) {
 	var task Task
-	if err := readJSON(file, &task); err != nil {
+	if err := readJSON(taskFile(root, taskID), &task); err != nil {
 		return nil, fmt.Errorf("task %q not found: %w", taskID, err)
 	}
 
 	return &task, nil
 }
 
-func ReadVersionSystemPrompt(agentID, versionID string) (string, error) {
-	file, err := versionSystemPromptFile(agentID, versionID)
-	if err != nil {
-		return "", err
-	}
-
-	content, err := os.ReadFile(file)
+func ReadVersionSystemPrompt(root, agentID, versionID string) (string, error) {
+	content, err := os.ReadFile(versionSystemPromptFile(root, agentID, versionID))
 	if err != nil {
 		return "", err
 	}
@@ -82,16 +62,12 @@ func ReadVersionSystemPrompt(agentID, versionID string) (string, error) {
 	return string(content), nil
 }
 
-func TaskPromptPath(taskID string) (string, error) {
-	return taskPromptFile(taskID)
+func TaskPromptPath(root, taskID string) string {
+	return taskPromptFile(root, taskID)
 }
 
-func CreateAgent(id, name, description string) (*Agent, error) {
-	file, err := agentFile(id)
-	if err != nil {
-		return nil, err
-	}
-
+func CreateAgent(root, id, name, description string) (*Agent, error) {
+	file := agentFile(root, id)
 	if _, err := os.Stat(file); err == nil {
 		return nil, fmt.Errorf("agent %q already exists", id)
 	}
@@ -104,11 +80,7 @@ func CreateAgent(id, name, description string) (*Agent, error) {
 		Versions:    []string{},
 	}
 
-	dir, err := agentDir(id)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(agentDir(root, id), 0o755); err != nil {
 		return nil, err
 	}
 	if err := writeJSON(file, agent); err != nil {
@@ -129,16 +101,13 @@ type AgentVersionInput struct {
 	Skills           ResourceIsolation
 }
 
-func CreateAgentVersion(agentID, versionID string, in AgentVersionInput) (*AgentVersion, error) {
-	agent, err := GetAgent(agentID)
+func CreateAgentVersion(root, agentID, versionID string, in AgentVersionInput) (*AgentVersion, error) {
+	agent, err := GetAgent(root, agentID)
 	if err != nil {
 		return nil, err
 	}
 
-	vFile, err := versionFile(agentID, versionID)
-	if err != nil {
-		return nil, err
-	}
+	vFile := versionFile(root, agentID, versionID)
 	if _, err := os.Stat(vFile); err == nil {
 		return nil, fmt.Errorf("version %q already exists for agent %q", versionID, agentID)
 	}
@@ -165,19 +134,10 @@ func CreateAgentVersion(agentID, versionID string, in AgentVersionInput) (*Agent
 		Notes:      in.Notes,
 	}
 
-	vDir, err := versionsDir(agentID)
-	if err != nil {
+	if err := os.MkdirAll(versionsDir(root, agentID), 0o755); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(vDir, 0o755); err != nil {
-		return nil, err
-	}
-
-	promptFile, err := versionSystemPromptFile(agentID, versionID)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(promptFile, promptContent, 0o644); err != nil {
+	if err := os.WriteFile(versionSystemPromptFile(root, agentID, versionID), promptContent, 0o644); err != nil {
 		return nil, err
 	}
 	if err := writeJSON(vFile, version); err != nil {
@@ -185,23 +145,15 @@ func CreateAgentVersion(agentID, versionID string, in AgentVersionInput) (*Agent
 	}
 
 	agent.Versions = append(agent.Versions, versionID)
-	aFile, err := agentFile(agentID)
-	if err != nil {
-		return nil, err
-	}
-	if err := writeJSON(aFile, agent); err != nil {
+	if err := writeJSON(agentFile(root, agentID), agent); err != nil {
 		return nil, err
 	}
 
 	return version, nil
 }
 
-func CreateTask(id, promptFile, notes string) (*Task, error) {
-	file, err := taskFile(id)
-	if err != nil {
-		return nil, err
-	}
-
+func CreateTask(root, id, promptFile, notes string) (*Task, error) {
+	file := taskFile(root, id)
 	if _, err := os.Stat(file); err == nil {
 		return nil, fmt.Errorf("task %q already exists", id)
 	}
@@ -218,19 +170,10 @@ func CreateTask(id, promptFile, notes string) (*Task, error) {
 		CreatedAt:  time.Now().UnixMilli(),
 	}
 
-	dir, err := tasksDir()
-	if err != nil {
+	if err := os.MkdirAll(tasksDir(root), 0o755); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-
-	pFile, err := taskPromptFile(id)
-	if err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(pFile, promptContent, 0o644); err != nil {
+	if err := os.WriteFile(taskPromptFile(root, id), promptContent, 0o644); err != nil {
 		return nil, err
 	}
 	if err := writeJSON(file, task); err != nil {
@@ -240,12 +183,8 @@ func CreateTask(id, promptFile, notes string) (*Task, error) {
 	return task, nil
 }
 
-func ListAgents() ([]*Agent, error) {
-	dir, err := agentsDir()
-	if err != nil {
-		return nil, err
-	}
-
+func ListAgents(root string) ([]*Agent, error) {
+	dir := agentsDir(root)
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -260,13 +199,8 @@ func ListAgents() ([]*Agent, error) {
 			continue
 		}
 
-		file, err := agentFile(entry.Name())
-		if err != nil {
-			return nil, err
-		}
-
 		var agent Agent
-		if err := readJSON(file, &agent); err != nil {
+		if err := readJSON(agentFile(root, entry.Name()), &agent); err != nil {
 			continue
 		}
 
@@ -276,12 +210,8 @@ func ListAgents() ([]*Agent, error) {
 	return agents, nil
 }
 
-func ListTasks() ([]*Task, error) {
-	dir, err := tasksDir()
-	if err != nil {
-		return nil, err
-	}
-
+func ListTasks(root string) ([]*Task, error) {
+	dir := tasksDir(root)
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return nil, nil

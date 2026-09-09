@@ -61,7 +61,12 @@ func NewListCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			switch args[0] {
 			case "agents":
-				agents, err := registry.ListAgents()
+				root, err := registry.ResolveRoot()
+				if err != nil {
+					return err
+				}
+
+				agents, err := registry.ListAgents(root)
 				if err != nil {
 					return err
 				}
@@ -72,7 +77,12 @@ func NewListCommand() *cobra.Command {
 
 				return nil
 			case "tasks":
-				tasks, err := registry.ListTasks()
+				root, err := registry.ResolveRoot()
+				if err != nil {
+					return err
+				}
+
+				tasks, err := registry.ListTasks(root)
 				if err != nil {
 					return err
 				}

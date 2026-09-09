@@ -3,6 +3,7 @@ module github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab
 go 1.26.5
 
 require (
+	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/darkokos/pi-agent-framework/pi-agent-compare v0.0.0-00010101000000-000000000000
@@ -10,6 +11,7 @@ require (
 )
 
 require (
+	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect
 	github.com/charmbracelet/x/ansi v0.11.6 // indirect

@@ -82,25 +82,26 @@ func NewShowCommand() *cobra.Command {
 
 			taskID := args[1]
 
-			version, err := registry.GetAgentVersion(agentID, versionID)
+			root, err := registry.ResolveRoot()
 			if err != nil {
 				return err
 			}
 
-			if _, err := registry.GetTask(taskID); err != nil {
-				return err
-			}
-
-			systemPrompt, err := registry.ReadVersionSystemPrompt(agentID, versionID)
+			version, err := registry.GetAgentVersion(root, agentID, versionID)
 			if err != nil {
 				return err
 			}
 
-			taskPromptPath, err := registry.TaskPromptPath(taskID)
+			if _, err := registry.GetTask(root, taskID); err != nil {
+				return err
+			}
+
+			systemPrompt, err := registry.ReadVersionSystemPrompt(root, agentID, versionID)
 			if err != nil {
 				return err
 			}
 
+			taskPromptPath := registry.TaskPromptPath(root, taskID)
 			line, err := buildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath, version)
 			if err != nil {
 				return err

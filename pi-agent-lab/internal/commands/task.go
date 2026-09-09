@@ -27,7 +27,12 @@ func newTaskCreateCommand() *cobra.Command {
 		Short: "Register a new task (standardized input)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			task, err := registry.CreateTask(args[0], promptFile, notes)
+			root, err := registry.ResolveRoot()
+			if err != nil {
+				return err
+			}
+
+			task, err := registry.CreateTask(root, args[0], promptFile, notes)
 			if err != nil {
 				return err
 			}
