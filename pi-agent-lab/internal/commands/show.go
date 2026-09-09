@@ -18,7 +18,7 @@ func buildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath st
 		"PI_AGENT_VERSION=" + shellQuote(agentID+"@"+versionID),
 		"PI_TASK_ID=" + shellQuote(taskID),
 		"PI_RUN_ID=$(uuidgen)",
-		"pi", "-p",
+		"pi",
 		"--model", shellQuote(version.Model),
 	}
 
