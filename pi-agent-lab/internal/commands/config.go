@@ -26,6 +26,9 @@ func newConfigSetRegistryDirCommand() *cobra.Command {
 		Use:   "set-registry-dir <path>",
 		Short: "Set where the agent/task registry lives",
 		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveFilterDirs
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			abs, err := filepath.Abs(args[0])
 			if err != nil {

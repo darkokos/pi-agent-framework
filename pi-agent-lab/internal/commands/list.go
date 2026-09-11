@@ -93,18 +93,35 @@ func NewListCommand() *cobra.Command {
 
 				return nil
 			case "runs":
+				if taskID != "" {
+					root, err := registry.ResolveRoot()
+					if err != nil {
+						return err
+					}
+
+					if _, err := registry.GetTask(root, taskID); err != nil {
+						return err
+					}
+				}
+
 				records, err := registry.ListRecords()
 				if err != nil {
 					return err
 				}
 
 				groups := compare.GroupByTask(records)
+				found := false
 				for _, group := range groups {
 					if taskID != "" && group.TaskID != taskID {
 						continue
 					}
 
+					found = true
 					printTaskGroup(cmd.OutOrStdout(), group)
+				}
+
+				if taskID != "" && !found {
+					fmt.Fprintf(cmd.OutOrStdout(), "no runs recorded for task %q\n", taskID)
 				}
 
 				return nil
@@ -115,6 +132,8 @@ func NewListCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&taskID, "task", "", "filter 'list runs' to a single task id")
+
+	_ = cmd.RegisterFlagCompletionFunc("task", completeTaskIDs)
 
 	return cmd
 }

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -58,6 +59,24 @@ func newAgentCreateCommand() *cobra.Command {
 	return cmd
 }
 
+func requireValidThinkingLevel(thinking string) error {
+	if thinking == "" || isValidThinkingLevel(thinking) {
+		return nil
+	}
+
+	return fmt.Errorf("--thinking must be one of %s, got %q", strings.Join(thinkingLevels, "|"), thinking)
+}
+
+func requireValidPaths(flag string, paths []string, valid func(string) bool) error {
+	for _, p := range paths {
+		if !valid(p) {
+			return fmt.Errorf("--%s %q is not a valid path", flag, p)
+		}
+	}
+
+	return nil
+}
+
 func newAgentVersionCommand() *cobra.Command {
 	var (
 		systemPromptFile  string
@@ -77,9 +96,28 @@ func newAgentVersionCommand() *cobra.Command {
 		Use:   "version <agent-id> <version-id>",
 		Short: "Add a new version to an existing agent",
 		Args:  cobra.ExactArgs(2),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) == 0 {
+				return completeAgentIDs(cmd, args, toComplete)
+			}
+
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !validToolsModes[toolsMode] {
 				return fmt.Errorf("--tools-mode must be one of all|none|extensions-only|allowlist|denylist, got %q", toolsMode)
+			}
+			if err := requireValidThinkingLevel(thinking); err != nil {
+				return err
+			}
+			if err := validateModelProvider(model, provider); err != nil {
+				return err
+			}
+			if err := requireValidPaths("extension", extensionPaths, isValidExtensionPath); err != nil {
+				return err
+			}
+			if err := requireValidPaths("skill", skillPaths, isValidSkillPath); err != nil {
+				return err
 			}
 
 			root, err := registry.ResolveRoot()
@@ -129,6 +167,15 @@ func newAgentVersionCommand() *cobra.Command {
 	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "skill path to load under isolation, repeatable")
 	_ = cmd.MarkFlagRequired("system-prompt-file")
 	_ = cmd.MarkFlagRequired("model")
+
+	_ = cmd.RegisterFlagCompletionFunc("system-prompt-file", completeFilePaths)
+	_ = cmd.RegisterFlagCompletionFunc("model", completeModels)
+	_ = cmd.RegisterFlagCompletionFunc("provider", completeProviders)
+	_ = cmd.RegisterFlagCompletionFunc("thinking", completeThinkingLevels)
+	_ = cmd.RegisterFlagCompletionFunc("tools-mode", completeToolsModes)
+	_ = cmd.RegisterFlagCompletionFunc("tools", completeToolsList)
+	_ = cmd.RegisterFlagCompletionFunc("extension", completeExtensionPaths)
+	_ = cmd.RegisterFlagCompletionFunc("skill", completeSkillPaths)
 
 	return cmd
 }

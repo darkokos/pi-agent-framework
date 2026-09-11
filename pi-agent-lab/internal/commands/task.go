@@ -47,5 +47,7 @@ func newTaskCreateCommand() *cobra.Command {
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this task")
 	_ = cmd.MarkFlagRequired("prompt-file")
 
+	_ = cmd.RegisterFlagCompletionFunc("prompt-file", completeFilePaths)
+
 	return cmd
 }

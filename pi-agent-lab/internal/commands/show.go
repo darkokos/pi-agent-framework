@@ -74,6 +74,16 @@ func NewShowCommand() *cobra.Command {
 		Use:   "show <agent-id>@<version-id> <task-id>",
 		Short: "Print (never run) the pi invocation for an agent version + task",
 		Args:  cobra.ExactArgs(2),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) == 0 {
+				return completeAgentVersions(cmd, args, toComplete)
+			}
+			if len(args) == 1 {
+				return completeTaskIDs(cmd, args, toComplete)
+			}
+
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			agentID, versionID, ok := strings.Cut(args[0], "@")
 			if !ok {
