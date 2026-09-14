@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
@@ -181,6 +182,105 @@ func CreateTask(root, id, promptFile, notes string) (*Task, error) {
 	}
 
 	return task, nil
+}
+
+func ReplaceAgent(root string, agent *Agent) (*Agent, error) {
+	if _, err := GetAgent(root, agent.ID); err != nil {
+		return nil, err
+	}
+
+	if err := writeJSON(agentFile(root, agent.ID), agent); err != nil {
+		return nil, err
+	}
+
+	return agent, nil
+}
+
+func ReplaceAgentVersion(root, agentID, versionID string, version *AgentVersion, newSystemPromptFile string) (*AgentVersion, error) {
+	if _, err := GetAgentVersion(root, agentID, versionID); err != nil {
+		return nil, err
+	}
+
+	if newSystemPromptFile != "" {
+		content, err := os.ReadFile(newSystemPromptFile)
+		if err != nil {
+			return nil, fmt.Errorf("reading system prompt file: %w", err)
+		}
+
+		if err := os.WriteFile(versionSystemPromptFile(root, agentID, versionID), content, 0o644); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := writeJSON(versionFile(root, agentID, versionID), version); err != nil {
+		return nil, err
+	}
+
+	return version, nil
+}
+
+func ReplaceTask(root string, task *Task, newPromptFile string) (*Task, error) {
+	if _, err := GetTask(root, task.ID); err != nil {
+		return nil, err
+	}
+
+	if newPromptFile != "" {
+		content, err := os.ReadFile(newPromptFile)
+		if err != nil {
+			return nil, fmt.Errorf("reading prompt file: %w", err)
+		}
+
+		if err := os.WriteFile(taskPromptFile(root, task.ID), content, 0o644); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := writeJSON(taskFile(root, task.ID), task); err != nil {
+		return nil, err
+	}
+
+	return task, nil
+}
+
+func DeleteAgent(root, agentID string) error {
+	if _, err := GetAgent(root, agentID); err != nil {
+		return err
+	}
+
+	return os.RemoveAll(agentDir(root, agentID))
+}
+
+func DeleteAgentVersion(root, agentID, versionID string) error {
+	agent, err := GetAgent(root, agentID)
+	if err != nil {
+		return err
+	}
+	if _, err := GetAgentVersion(root, agentID, versionID); err != nil {
+		return err
+	}
+
+	if err := os.Remove(versionFile(root, agentID, versionID)); err != nil {
+		return err
+	}
+	if err := os.Remove(versionSystemPromptFile(root, agentID, versionID)); err != nil {
+		return err
+	}
+
+	agent.Versions = slices.DeleteFunc(agent.Versions, func(v string) bool { return v == versionID })
+
+	return writeJSON(agentFile(root, agentID), agent)
+}
+
+func DeleteTask(root, taskID string) error {
+	if _, err := GetTask(root, taskID); err != nil {
+		return err
+	}
+
+	if err := os.Remove(taskFile(root, taskID)); err != nil {
+		return err
+	}
+
+	return os.Remove(taskPromptFile(root, taskID))
 }
 
 func ListAgents(root string) ([]*Agent, error) {
