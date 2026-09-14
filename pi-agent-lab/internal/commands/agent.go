@@ -2,38 +2,48 @@ package commands
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/darkokos/pi-agent-framework/pi-agent-lab/internal/format"
+	"github.com/darkokos/pi-agent-framework/pi-agent-lab/internal/validate"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
-var validToolsModes = map[string]bool{
-	"all":             true,
-	"none":            true,
-	"extensions-only": true,
-	"allowlist":       true,
-	"denylist":        true,
-}
-
-func NewAgentCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "agent",
-		Short: "Create and version agent definitions",
+func requireValidThinkingLevel(thinking string) error {
+	if thinking == "" || validate.ThinkingLevel(thinking) {
+		return nil
 	}
 
-	cmd.AddCommand(newAgentCreateCommand())
-	cmd.AddCommand(newAgentVersionCommand())
-
-	return cmd
+	return fmt.Errorf("--thinking must be one of %s, got %q", strings.Join(validate.ThinkingLevels, "|"), thinking)
 }
 
-func newAgentCreateCommand() *cobra.Command {
+func requireValidPaths(flag string, paths []string, valid func(string) bool) error {
+	for _, p := range paths {
+		if !valid(p) {
+			return fmt.Errorf("--%s %q is not a valid path", flag, p)
+		}
+	}
+
+	return nil
+}
+
+func parseAgentVersionRef(s string) (agentID, versionID string, err error) {
+	agentID, versionID, ok := strings.Cut(s, "@")
+	if !ok {
+		return "", "", fmt.Errorf("expected <agent-id>@<version-id>, got %q", s)
+	}
+
+	return agentID, versionID, nil
+}
+
+func newCreateAgentCommand() *cobra.Command {
 	var name, description string
 
 	cmd := &cobra.Command{
-		Use:   "create <agent-id>",
+		Use:   "agent <agent-id>",
 		Short: "Register a new agent",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -59,25 +69,7 @@ func newAgentCreateCommand() *cobra.Command {
 	return cmd
 }
 
-func requireValidThinkingLevel(thinking string) error {
-	if thinking == "" || isValidThinkingLevel(thinking) {
-		return nil
-	}
-
-	return fmt.Errorf("--thinking must be one of %s, got %q", strings.Join(thinkingLevels, "|"), thinking)
-}
-
-func requireValidPaths(flag string, paths []string, valid func(string) bool) error {
-	for _, p := range paths {
-		if !valid(p) {
-			return fmt.Errorf("--%s %q is not a valid path", flag, p)
-		}
-	}
-
-	return nil
-}
-
-func newAgentVersionCommand() *cobra.Command {
+func newCreateAgentVersionCommand() *cobra.Command {
 	var (
 		systemPromptFile  string
 		model             string
@@ -93,30 +85,28 @@ func newAgentVersionCommand() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "version <agent-id> <version-id>",
-		Short: "Add a new version to an existing agent",
-		Args:  cobra.ExactArgs(2),
-		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			if len(args) == 0 {
-				return completeAgentIDs(cmd, args, toComplete)
-			}
-
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		},
+		Use:               "agent-version <agent-id>@<version-id>",
+		Short:             "Add a new version to an existing agent",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeAgentIDCompoundPrefix,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !validToolsModes[toolsMode] {
-				return fmt.Errorf("--tools-mode must be one of all|none|extensions-only|allowlist|denylist, got %q", toolsMode)
+			agentID, versionID, err := parseAgentVersionRef(args[0])
+			if err != nil {
+				return err
+			}
+			if !slices.Contains(validate.ToolsModes, toolsMode) {
+				return fmt.Errorf("--tools-mode must be one of %s, got %q", strings.Join(validate.ToolsModes, "|"), toolsMode)
 			}
 			if err := requireValidThinkingLevel(thinking); err != nil {
 				return err
 			}
-			if err := validateModelProvider(model, provider); err != nil {
+			if err := validate.ModelProvider(model, provider); err != nil {
 				return err
 			}
-			if err := requireValidPaths("extension", extensionPaths, isValidExtensionPath); err != nil {
+			if err := requireValidPaths("extension", extensionPaths, validate.ExtensionPath); err != nil {
 				return err
 			}
-			if err := requireValidPaths("skill", skillPaths, isValidSkillPath); err != nil {
+			if err := requireValidPaths("skill", skillPaths, validate.SkillPath); err != nil {
 				return err
 			}
 
@@ -125,7 +115,7 @@ func newAgentVersionCommand() *cobra.Command {
 				return err
 			}
 
-			version, err := registry.CreateAgentVersion(root, args[0], args[1], registry.AgentVersionInput{
+			version, err := registry.CreateAgentVersion(root, agentID, versionID, registry.AgentVersionInput{
 				SystemPromptFile: systemPromptFile,
 				Model:            model,
 				Provider:         provider,
@@ -161,7 +151,7 @@ func newAgentVersionCommand() *cobra.Command {
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
 	cmd.Flags().StringVar(&toolsMode, "tools-mode", "all", "all|none|extensions-only|allowlist|denylist")
 	cmd.Flags().StringSliceVar(&toolNames, "tools", nil, "comma-separated tool names, used with --tools-mode allowlist|denylist")
-	cmd.Flags().BoolVar(&extensionsIsolate, "extensions-isolate", false, "pass --no-extensions and pin only --extension paths given below (pi-session-record is re-added automatically, see show)")
+	cmd.Flags().BoolVar(&extensionsIsolate, "extensions-isolate", false, "pass --no-extensions and pin only --extension paths given below (pi-session-record is re-added automatically, see invocation)")
 	cmd.Flags().StringArrayVar(&extensionPaths, "extension", nil, "extension path to load under isolation, repeatable")
 	cmd.Flags().BoolVar(&skillsIsolate, "skills-isolate", false, "pass --no-skills and pin only --skill paths given below")
 	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "skill path to load under isolation, repeatable")
@@ -178,4 +168,140 @@ func newAgentVersionCommand() *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("skill", completeSkillPaths)
 
 	return cmd
+}
+
+func newListAgentsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "agents",
+		Short: "List registered agents",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := registry.ResolveRoot()
+			if err != nil {
+				return err
+			}
+
+			agents, err := registry.ListAgents(root)
+			if err != nil {
+				return err
+			}
+
+			tw := format.NewTabWriter(cmd.OutOrStdout())
+			fmt.Fprintln(tw, "ID\tNAME\tDESCRIPTION\tVERSIONS")
+			for _, agent := range agents {
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", agent.ID, agent.Name, agent.Description, strings.Join(agent.Versions, ", "))
+			}
+
+			return tw.Flush()
+		},
+	}
+}
+
+func newListAgentVersionsCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "agent-versions <agent-id>",
+		Short: "List the versions of an agent",
+		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return completeAgentIDs(cmd, args, toComplete)
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := registry.ResolveRoot()
+			if err != nil {
+				return err
+			}
+
+			agent, err := registry.GetAgent(root, args[0])
+			if err != nil {
+				return err
+			}
+
+			tw := format.NewTabWriter(cmd.OutOrStdout())
+			fmt.Fprintln(tw, "VERSION ID\tMODEL\tPROVIDER\tTHINKING\tTOOLS MODE\tNOTES\tCREATED AT")
+			for _, versionID := range agent.Versions {
+				version, err := registry.GetAgentVersion(root, agent.ID, versionID)
+				if err != nil {
+					return err
+				}
+
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					version.VersionID, version.Model, version.Provider, version.Thinking,
+					version.Tools.Mode, version.Notes, format.UnixMilli(version.CreatedAt),
+				)
+			}
+
+			return tw.Flush()
+		},
+	}
+}
+
+func newShowAgentCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "agent <agent-id>",
+		Short: "Show full details of a single agent",
+		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return completeAgentIDs(cmd, args, toComplete)
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			root, err := registry.ResolveRoot()
+			if err != nil {
+				return err
+			}
+
+			agent, err := registry.GetAgent(root, args[0])
+			if err != nil {
+				return err
+			}
+
+			tw := format.NewTabWriter(cmd.OutOrStdout())
+			fmt.Fprintf(tw, "ID:\t%s\n", agent.ID)
+			fmt.Fprintf(tw, "Name:\t%s\n", agent.Name)
+			fmt.Fprintf(tw, "Description:\t%s\n", agent.Description)
+			fmt.Fprintf(tw, "Created At:\t%s\n", format.UnixMilli(agent.CreatedAt))
+			fmt.Fprintf(tw, "Versions:\t%s\n", strings.Join(agent.Versions, ", "))
+
+			return tw.Flush()
+		},
+	}
+}
+
+func newShowAgentVersionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:               "agent-version <agent-id>@<version-id>",
+		Short:             "Show full details of a single agent version",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeAgentVersionCompound,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			agentID, versionID, err := parseAgentVersionRef(args[0])
+			if err != nil {
+				return err
+			}
+
+			root, err := registry.ResolveRoot()
+			if err != nil {
+				return err
+			}
+
+			version, err := registry.GetAgentVersion(root, agentID, versionID)
+			if err != nil {
+				return err
+			}
+
+			tw := format.NewTabWriter(cmd.OutOrStdout())
+			fmt.Fprintf(tw, "Agent ID:\t%s\n", version.AgentID)
+			fmt.Fprintf(tw, "Version ID:\t%s\n", version.VersionID)
+			fmt.Fprintf(tw, "Created At:\t%s\n", format.UnixMilli(version.CreatedAt))
+			fmt.Fprintf(tw, "Model:\t%s\n", version.Model)
+			fmt.Fprintf(tw, "Provider:\t%s\n", version.Provider)
+			fmt.Fprintf(tw, "Thinking:\t%s\n", version.Thinking)
+			fmt.Fprintf(tw, "System Prompt:\t%s (%s)\n", version.SystemPrompt.File, version.SystemPrompt.Mode)
+			fmt.Fprintf(tw, "Tools:\t%s %s\n", version.Tools.Mode, strings.Join(version.Tools.Names, ", "))
+			fmt.Fprintf(tw, "Extensions:\t isolate=%t %s\n", version.Extensions.Isolate, strings.Join(version.Extensions.Paths, ", "))
+			fmt.Fprintf(tw, "Skills:\t isolate=%t %s\n", version.Skills.Isolate, strings.Join(version.Skills.Paths, ", "))
+			fmt.Fprintf(tw, "Notes:\t%s\n", version.Notes)
+
+			return tw.Flush()
+		},
+	}
 }

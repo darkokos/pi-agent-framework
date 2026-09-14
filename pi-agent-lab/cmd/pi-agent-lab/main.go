@@ -15,10 +15,10 @@ func main() {
 		Short: "Create, version, and compare Pi agents",
 	}
 
-	root.AddCommand(commands.NewAgentCommand())
-	root.AddCommand(commands.NewTaskCommand())
+	root.AddCommand(commands.NewCreateCommand())
 	root.AddCommand(commands.NewListCommand())
 	root.AddCommand(commands.NewShowCommand())
+	root.AddCommand(commands.NewInvocationCommand())
 	root.AddCommand(commands.NewConfigCommand())
 
 	if err := root.Execute(); err != nil {
