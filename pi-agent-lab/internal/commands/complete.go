@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/darkokos/pi-agent-framework/pi-agent-lab/internal/validate"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
+	"github.com/darkokos/pi-agent-framework/pi-agent-validate"
 )
 
 func completeThinkingLevels(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
