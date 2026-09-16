@@ -92,7 +92,6 @@ func newShowTaskCommand() *cobra.Command {
 			fmt.Fprintf(tw, "ID:\t%s\n", task.ID)
 			fmt.Fprintf(tw, "Prompt File:\t%s\n", task.PromptFile)
 			fmt.Fprintf(tw, "Notes:\t%s\n", task.Notes)
-			fmt.Fprintf(tw, "Created At:\t%s\n", format.UnixMilli(task.CreatedAt))
 
 			return tw.Flush()
 		},

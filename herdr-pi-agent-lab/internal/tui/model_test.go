@@ -32,10 +32,10 @@ func TestLoadData_AssociatesGroupsWithRegisteredTasks(t *testing.T) {
 	}
 
 	writeJSONFile(t, filepath.Join(tasksDir, "refactor-auth.json"), map[string]any{
-		"id": "refactor-auth", "promptFile": "refactor-auth.prompt.md", "createdAt": 1,
+		"id": "refactor-auth", "promptFile": "refactor-auth.prompt.md",
 	})
 	writeJSONFile(t, filepath.Join(tasksDir, "no-runs-yet.json"), map[string]any{
-		"id": "no-runs-yet", "promptFile": "no-runs-yet.prompt.md", "createdAt": 1,
+		"id": "no-runs-yet", "promptFile": "no-runs-yet.prompt.md",
 	})
 
 	writeJSONFile(t, filepath.Join(recordsDir, "s1.json"), map[string]any{

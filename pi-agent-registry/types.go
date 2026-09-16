@@ -4,7 +4,6 @@ type Agent struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
-	CreatedAt   int64    `json:"createdAt"`
 	Versions    []string `json:"versions"`
 }
 
@@ -26,7 +25,6 @@ type ResourceIsolation struct {
 type AgentVersion struct {
 	AgentID      string            `json:"agentId"`
 	VersionID    string            `json:"versionId"`
-	CreatedAt    int64             `json:"createdAt"`
 	Model        string            `json:"model"`
 	Provider     string            `json:"provider,omitempty"`
 	Thinking     string            `json:"thinking,omitempty"`
@@ -41,5 +39,4 @@ type Task struct {
 	ID         string `json:"id"`
 	PromptFile string `json:"promptFile"`
 	Notes      string `json:"notes,omitempty"`
-	CreatedAt  int64  `json:"createdAt"`
 }

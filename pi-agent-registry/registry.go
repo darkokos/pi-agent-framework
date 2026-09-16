@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"time"
 )
 
 func readJSON(path string, v any) error {
@@ -77,7 +76,6 @@ func CreateAgent(root, id, name, description string) (*Agent, error) {
 		ID:          id,
 		Name:        name,
 		Description: description,
-		CreatedAt:   time.Now().UnixMilli(),
 		Versions:    []string{},
 	}
 
@@ -121,7 +119,6 @@ func CreateAgentVersion(root, agentID, versionID string, in AgentVersionInput) (
 	version := &AgentVersion{
 		AgentID:   agentID,
 		VersionID: versionID,
-		CreatedAt: time.Now().UnixMilli(),
 		Model:     in.Model,
 		Provider:  in.Provider,
 		Thinking:  in.Thinking,
@@ -168,7 +165,6 @@ func CreateTask(root, id, promptFile, notes string) (*Task, error) {
 		ID:         id,
 		PromptFile: id + ".prompt.md",
 		Notes:      notes,
-		CreatedAt:  time.Now().UnixMilli(),
 	}
 
 	if err := os.MkdirAll(tasksDir(root), 0o755); err != nil {

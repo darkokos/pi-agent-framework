@@ -215,16 +215,16 @@ func newListAgentVersionsCommand() *cobra.Command {
 			}
 
 			tw := format.NewTabWriter(cmd.OutOrStdout())
-			fmt.Fprintln(tw, "VERSION ID\tMODEL\tPROVIDER\tTHINKING\tTOOLS MODE\tNOTES\tCREATED AT")
+			fmt.Fprintln(tw, "VERSION ID\tMODEL\tPROVIDER\tTHINKING\tTOOLS MODE\tNOTES")
 			for _, versionID := range agent.Versions {
 				version, err := registry.GetAgentVersion(root, agent.ID, versionID)
 				if err != nil {
 					return err
 				}
 
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
 					version.VersionID, version.Model, version.Provider, version.Thinking,
-					version.Tools.Mode, version.Notes, format.UnixMilli(version.CreatedAt),
+					version.Tools.Mode, version.Notes,
 				)
 			}
 
@@ -256,7 +256,6 @@ func newShowAgentCommand() *cobra.Command {
 			fmt.Fprintf(tw, "ID:\t%s\n", agent.ID)
 			fmt.Fprintf(tw, "Name:\t%s\n", agent.Name)
 			fmt.Fprintf(tw, "Description:\t%s\n", agent.Description)
-			fmt.Fprintf(tw, "Created At:\t%s\n", format.UnixMilli(agent.CreatedAt))
 			fmt.Fprintf(tw, "Versions:\t%s\n", strings.Join(agent.Versions, ", "))
 
 			return tw.Flush()
@@ -289,7 +288,6 @@ func newShowAgentVersionCommand() *cobra.Command {
 			tw := format.NewTabWriter(cmd.OutOrStdout())
 			fmt.Fprintf(tw, "Agent ID:\t%s\n", version.AgentID)
 			fmt.Fprintf(tw, "Version ID:\t%s\n", version.VersionID)
-			fmt.Fprintf(tw, "Created At:\t%s\n", format.UnixMilli(version.CreatedAt))
 			fmt.Fprintf(tw, "Model:\t%s\n", version.Model)
 			fmt.Fprintf(tw, "Provider:\t%s\n", version.Provider)
 			fmt.Fprintf(tw, "Thinking:\t%s\n", version.Thinking)

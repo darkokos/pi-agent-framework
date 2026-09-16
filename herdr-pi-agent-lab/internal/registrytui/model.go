@@ -88,10 +88,6 @@ type dataMsg struct {
 
 type errMsg struct{ err error }
 
-func formatUnixMilli(ms int64) string {
-	return time.UnixMilli(ms).Format(time.RFC3339)
-}
-
 func NewModel() Model {
 	return Model{loading: true}
 }
@@ -468,8 +464,7 @@ func (m Model) viewAgentDetail(b *strings.Builder) {
 	b.WriteString("\n")
 	fmt.Fprintf(b, "ID:           %s\n", a.ID)
 	fmt.Fprintf(b, "Name:         %s\n", a.Name)
-	fmt.Fprintf(b, "Description:  %s\n", a.Description)
-	fmt.Fprintf(b, "Created At:   %s\n\n", formatUnixMilli(a.CreatedAt))
+	fmt.Fprintf(b, "Description:  %s\n\n", a.Description)
 	b.WriteString("Versions:\n")
 
 	if len(a.Versions) == 0 {
@@ -488,7 +483,6 @@ func (m Model) viewVersionDetail(b *strings.Builder) {
 	v := m.selectedVersion
 	fmt.Fprintf(b, "Agent ID:       %s\n", v.AgentID)
 	fmt.Fprintf(b, "Version ID:     %s\n", v.VersionID)
-	fmt.Fprintf(b, "Created At:     %s\n", formatUnixMilli(v.CreatedAt))
 	fmt.Fprintf(b, "Model:          %s\n", v.Model)
 	fmt.Fprintf(b, "Provider:       %s\n", v.Provider)
 	fmt.Fprintf(b, "Thinking:       %s\n", v.Thinking)
@@ -504,7 +498,6 @@ func (m Model) viewTaskDetail(b *strings.Builder) {
 	fmt.Fprintf(b, "ID:           %s\n", t.ID)
 	fmt.Fprintf(b, "Prompt File:  %s\n", t.PromptFile)
 	fmt.Fprintf(b, "Notes:        %s\n", t.Notes)
-	fmt.Fprintf(b, "Created At:   %s\n", formatUnixMilli(t.CreatedAt))
 }
 
 func (m Model) helpText() string {
