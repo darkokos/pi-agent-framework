@@ -73,7 +73,6 @@ func newCreateAgentVersionCommand() *cobra.Command {
 	var (
 		systemPromptFile  string
 		model             string
-		provider          string
 		thinking          string
 		notes             string
 		toolsMode         string
@@ -100,7 +99,8 @@ func newCreateAgentVersionCommand() *cobra.Command {
 			if err := requireValidThinkingLevel(thinking); err != nil {
 				return err
 			}
-			if err := validate.ModelProvider(model, provider); err != nil {
+			resolvedModel, resolvedProvider, err := validate.ParseModel(model)
+			if err != nil {
 				return err
 			}
 			if err := requireValidPaths("extension", extensionPaths, validate.ExtensionPath); err != nil {
@@ -117,8 +117,8 @@ func newCreateAgentVersionCommand() *cobra.Command {
 
 			version, err := registry.CreateAgentVersion(root, agentID, versionID, registry.AgentVersionInput{
 				SystemPromptFile: systemPromptFile,
-				Model:            model,
-				Provider:         provider,
+				Model:            resolvedModel,
+				Provider:         resolvedProvider,
 				Thinking:         thinking,
 				Notes:            notes,
 				Tools: registry.ToolsConfig{
@@ -145,8 +145,7 @@ func newCreateAgentVersionCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&systemPromptFile, "system-prompt-file", "", "path to the system prompt text (required)")
-	cmd.Flags().StringVar(&model, "model", "", "model pattern, e.g. anthropic/claude-sonnet-4-5 (required)")
-	cmd.Flags().StringVar(&provider, "provider", "", "provider name")
+	cmd.Flags().StringVar(&model, "model", "", "model id, or provider/model when the model is offered by more than one provider (required)")
 	cmd.Flags().StringVar(&thinking, "thinking", "", "thinking level: off|minimal|low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
 	cmd.Flags().StringVar(&toolsMode, "tools-mode", "all", "all|none|extensions-only|allowlist|denylist")
@@ -160,7 +159,6 @@ func newCreateAgentVersionCommand() *cobra.Command {
 
 	_ = cmd.RegisterFlagCompletionFunc("system-prompt-file", completeFilePaths)
 	_ = cmd.RegisterFlagCompletionFunc("model", completeModels)
-	_ = cmd.RegisterFlagCompletionFunc("provider", completeProviders)
 	_ = cmd.RegisterFlagCompletionFunc("thinking", completeThinkingLevels)
 	_ = cmd.RegisterFlagCompletionFunc("tools-mode", completeToolsModes)
 	_ = cmd.RegisterFlagCompletionFunc("tools", completeToolsList)
@@ -353,7 +351,6 @@ func newUpdateAgentVersionCommand() *cobra.Command {
 	var (
 		systemPromptFile  string
 		model             string
-		provider          string
 		thinking          string
 		notes             string
 		toolsMode         string
@@ -387,19 +384,14 @@ func newUpdateAgentVersionCommand() *cobra.Command {
 
 			flags := cmd.Flags()
 
-			newModel, newProvider := version.Model, version.Provider
 			if flags.Changed("model") {
-				newModel = model
-			}
-			if flags.Changed("provider") {
-				newProvider = provider
-			}
-			if flags.Changed("model") || flags.Changed("provider") {
-				if err := validate.ModelProvider(newModel, newProvider); err != nil {
+				resolvedModel, resolvedProvider, err := validate.ParseModel(model)
+				if err != nil {
 					return err
 				}
+
+				version.Model, version.Provider = resolvedModel, resolvedProvider
 			}
-			version.Model, version.Provider = newModel, newProvider
 
 			if flags.Changed("thinking") {
 				if err := requireValidThinkingLevel(thinking); err != nil {
@@ -459,8 +451,7 @@ func newUpdateAgentVersionCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&systemPromptFile, "system-prompt-file", "", "path to the system prompt text")
-	cmd.Flags().StringVar(&model, "model", "", "model pattern, e.g. anthropic/claude-sonnet-4-5")
-	cmd.Flags().StringVar(&provider, "provider", "", "provider name")
+	cmd.Flags().StringVar(&model, "model", "", "model id, or provider/model when the model is offered by more than one provider")
 	cmd.Flags().StringVar(&thinking, "thinking", "", "thinking level: off|minimal|low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
 	cmd.Flags().StringVar(&toolsMode, "tools-mode", "", "all|none|extensions-only|allowlist|denylist")
@@ -472,7 +463,6 @@ func newUpdateAgentVersionCommand() *cobra.Command {
 
 	_ = cmd.RegisterFlagCompletionFunc("system-prompt-file", completeFilePaths)
 	_ = cmd.RegisterFlagCompletionFunc("model", completeModels)
-	_ = cmd.RegisterFlagCompletionFunc("provider", completeProviders)
 	_ = cmd.RegisterFlagCompletionFunc("thinking", completeThinkingLevels)
 	_ = cmd.RegisterFlagCompletionFunc("tools-mode", completeToolsModes)
 	_ = cmd.RegisterFlagCompletionFunc("tools", completeToolsList)

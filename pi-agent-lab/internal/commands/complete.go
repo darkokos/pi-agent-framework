@@ -51,36 +51,36 @@ func completeModels(_ *cobra.Command, _ []string, _ string) ([]string, cobra.She
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	seen := map[string]bool{}
-	var names []string
+	byModel := map[string][]string{}
 	for _, e := range entries {
-		if !seen[e.Model] {
-			seen[e.Model] = true
-			names = append(names, e.Model)
+		byModel[e.Model] = append(byModel[e.Model], e.Provider)
+	}
+
+	models := make([]string, 0, len(byModel))
+	for m := range byModel {
+		models = append(models, m)
+	}
+
+	sort.Strings(models)
+
+	var out []string
+	for _, m := range models {
+		providers := byModel[m]
+		sort.Strings(providers)
+
+		if len(providers) == 1 {
+			out = append(out, cobra.CompletionWithDesc(m, "provider: "+providers[0]))
+
+			continue
+		}
+
+		out = append(out, cobra.CompletionWithDesc(m, "ambiguous, offered by: "+strings.Join(providers, ", ")))
+		for _, p := range providers {
+			out = append(out, cobra.CompletionWithDesc(p+"/"+m, "explicit provider/model"))
 		}
 	}
-	sort.Strings(names)
 
-	return names, cobra.ShellCompDirectiveNoFileComp
-}
-
-func completeProviders(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-	entries, err := validate.ListModels()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	seen := map[string]bool{}
-	var names []string
-	for _, e := range entries {
-		if !seen[e.Provider] {
-			seen[e.Provider] = true
-			names = append(names, e.Provider)
-		}
-	}
-	sort.Strings(names)
-
-	return names, cobra.ShellCompDirectiveNoFileComp
+	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
 func completeExtensionPaths(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {

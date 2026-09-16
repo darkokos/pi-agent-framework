@@ -10,19 +10,37 @@ command = ["./scripts/build.sh"]
 platforms = ["macos", "linux"]
 
 [[panes]]
-id = "compare"
+id = "menu"
 title = "Pi Agent Lab"
+placement = "tab"
+command = ["./bin/pi-agent-lab-menu-pane"]
+
+[[panes]]
+id = "compare"
+title = "Pi Agent Lab — Compare"
 placement = "tab"
 command = ["./bin/pi-agent-lab-pane"]
 
+[[panes]]
+id = "registry"
+title = "Pi Agent Lab — Registry"
+placement = "tab"
+command = ["./bin/pi-agent-lab-registry-pane"]
+
+[[panes]]
+id = "config"
+title = "Pi Agent Lab — Config"
+placement = "tab"
+command = ["./bin/pi-agent-lab-config-pane"]
+
 [[actions]]
-id = "open-compare"
+id = "open-menu"
 title = "Open Pi Agent Lab"
 contexts = ["workspace"]
-command = ["herdr", "plugin", "pane", "open", "--plugin", "darkokos.pi-agent-lab", "--entrypoint", "compare"]
+command = ["herdr", "plugin", "pane", "open", "--plugin", "darkokos.pi-agent-lab", "--entrypoint", "menu"]
 
 [[keys.command]]
 key = "prefix+g"
 type = "plugin_action"
-command = "darkokos.pi-agent-lab.open-compare"
-description = "open pi agent lab comparison"
+command = "darkokos.pi-agent-lab.open-menu"
+description = "open pi agent lab"

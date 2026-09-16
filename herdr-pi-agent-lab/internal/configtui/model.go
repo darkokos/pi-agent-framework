@@ -1,0 +1,185 @@
+package configtui
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
+)
+
+var (
+	headerStyle = lipgloss.NewStyle().Bold(true)
+	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	okStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	helpStyle   = dimStyle
+)
+
+type screen int
+
+const (
+	screenView screen = iota
+	screenEdit
+)
+
+type Model struct {
+	screen  screen
+	root    string
+	input   textinput.Model
+	err     error
+	status  string
+	loading bool
+}
+
+type dataMsg struct{ root string }
+
+type errMsg struct{ err error }
+
+func NewModel() Model {
+	ti := textinput.New()
+	ti.Prompt = ""
+
+	return Model{loading: true, input: ti}
+}
+
+func loadRoot() tea.Cmd {
+	return func() tea.Msg {
+		root, err := registry.ResolveRoot()
+		if err != nil {
+			return errMsg{err}
+		}
+
+		return dataMsg{root: root}
+	}
+}
+
+func (m Model) Init() tea.Cmd {
+	return loadRoot()
+}
+
+func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.screen == screenEdit {
+		return m.handleEditKey(msg)
+	}
+
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+	case "e":
+		m.input.SetValue(m.root)
+		m.input.CursorEnd()
+		m.status = ""
+		m.err = nil
+		m.screen = screenEdit
+
+		return m, m.input.Focus()
+	}
+
+	return m, nil
+}
+
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case dataMsg:
+		m.loading = false
+		m.root = msg.root
+
+		return m, nil
+	case errMsg:
+		m.loading = false
+		m.err = msg.err
+
+		return m, nil
+	case tea.KeyMsg:
+		return m.handleKey(msg)
+	}
+
+	return m, nil
+}
+
+func (m Model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.screen = screenView
+		m.err = nil
+
+		return m, nil
+	case "ctrl+w":
+		path := strings.TrimSpace(m.input.Value())
+		if path == "" {
+			m.err = fmt.Errorf("registry directory is required")
+
+			return m, nil
+		}
+
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			m.err = err
+
+			return m, nil
+		}
+
+		if err := registry.SetRegistryDir(abs); err != nil {
+			m.err = err
+
+			return m, nil
+		}
+
+		m.root = abs
+		m.status = "saved"
+		m.err = nil
+		m.screen = screenView
+
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+
+	return m, cmd
+}
+
+func (m Model) View() string {
+	var b strings.Builder
+
+	b.WriteString(headerStyle.Render("Pi Agent Lab — Config"))
+	b.WriteString("\n\n")
+
+	if m.loading {
+		b.WriteString("loading...\n")
+
+		return b.String()
+	}
+
+	if m.err != nil {
+		b.WriteString(errStyle.Render(fmt.Sprintf("error: %v", m.err)))
+		b.WriteString("\n\n")
+	}
+	if m.status != "" {
+		b.WriteString(okStyle.Render(m.status))
+		b.WriteString("\n\n")
+	}
+
+	if m.screen == screenEdit {
+		b.WriteString("Registry Directory:\n")
+		b.WriteString(m.input.View())
+		b.WriteString("\n\n")
+		b.WriteString(dimStyle.Render("persisted to ~/.config/pi-agent-lab/config.json"))
+		b.WriteString("\n\n")
+		b.WriteString(helpStyle.Render("ctrl+w save  esc cancel"))
+
+		return b.String()
+	}
+
+	b.WriteString("Registry Directory:\n")
+	b.WriteString(m.root)
+	b.WriteString("\n\n")
+	b.WriteString(helpStyle.Render("e edit  q quit"))
+
+	return b.String()
+}

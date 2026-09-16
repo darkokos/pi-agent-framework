@@ -323,7 +323,7 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("j/k move  enter open  o override registry  esc back  q quit"))
+	b.WriteString(helpStyle.Render("j/k move  enter open  o override registry  q quit"))
 
 	return b.String()
 }

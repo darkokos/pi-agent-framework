@@ -84,6 +84,52 @@ func ModelProvider(model, provider string) error {
 	return fmt.Errorf("model %q not found in pi --list-models output", model)
 }
 
+func ParseModel(pattern string) (model, provider string, err error) {
+	entries, err := ListModels()
+	if err != nil {
+		return "", "", err
+	}
+
+	if p, m, ok := strings.Cut(pattern, "/"); ok {
+		for _, e := range entries {
+			if e.Model == m && e.Provider == p {
+				return m, p, nil
+			}
+		}
+
+		return "", "", fmt.Errorf("no model %q for provider %q found in pi --list-models output", m, p)
+	}
+
+	matches := ModelsForID(entries, pattern)
+	switch len(matches) {
+	case 0:
+		return "", "", fmt.Errorf("model %q not found in pi --list-models output", pattern)
+	case 1:
+		return pattern, matches[0].Provider, nil
+	default:
+		var providers []string
+		for _, e := range matches {
+			providers = append(providers, e.Provider)
+		}
+
+		return "", "", fmt.Errorf(
+			"model %q is offered by multiple providers (%s); disambiguate with provider/model, e.g. %s/%s",
+			pattern, strings.Join(providers, ", "), providers[0], pattern,
+		)
+	}
+}
+
+func ModelsForID(entries []ModelEntry, id string) []ModelEntry {
+	var out []ModelEntry
+	for _, e := range entries {
+		if e.Model == id {
+			out = append(out, e)
+		}
+	}
+
+	return out
+}
+
 func ExtensionPath(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
