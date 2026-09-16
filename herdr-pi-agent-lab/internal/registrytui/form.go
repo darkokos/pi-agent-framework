@@ -44,6 +44,8 @@ type formField struct {
 
 	resolvedModel    string
 	resolvedProvider string
+
+	visible func() bool
 }
 
 type form struct {
@@ -196,10 +198,43 @@ func (f *formField) blur() {
 func newForm(title string, fields []*formField, onSubmit func(f *form) error) *form {
 	fm := &form{title: title, fields: fields, onSubmit: onSubmit}
 	if len(fm.fields) > 0 {
-		fm.fields[0].focus()
+		fm.focus = -1
+		fm.nextField()
 	}
 
 	return fm
+}
+
+func (f *formField) isVisible() bool {
+	return f.visible == nil || f.visible()
+}
+
+func (fm *form) nextField() {
+	if fm.focus >= 0 {
+		fm.fields[fm.focus].blur()
+	}
+
+	for range fm.fields {
+		fm.focus = (fm.focus + 1) % len(fm.fields)
+		if fm.fields[fm.focus].isVisible() {
+			break
+		}
+	}
+
+	fm.fields[fm.focus].focus()
+}
+
+func (fm *form) prevField() {
+	fm.fields[fm.focus].blur()
+
+	for range fm.fields {
+		fm.focus = (fm.focus - 1 + len(fm.fields)) % len(fm.fields)
+		if fm.fields[fm.focus].isVisible() {
+			break
+		}
+	}
+
+	fm.fields[fm.focus].focus()
 }
 
 func (fm *form) handleKey(msg tea.KeyMsg) (tea.Cmd, bool, bool) {
@@ -207,15 +242,11 @@ func (fm *form) handleKey(msg tea.KeyMsg) (tea.Cmd, bool, bool) {
 	case "esc":
 		return nil, false, true
 	case "tab":
-		fm.fields[fm.focus].blur()
-		fm.focus = (fm.focus + 1) % len(fm.fields)
-		fm.fields[fm.focus].focus()
+		fm.nextField()
 
 		return nil, false, false
 	case "shift+tab":
-		fm.fields[fm.focus].blur()
-		fm.focus = (fm.focus - 1 + len(fm.fields)) % len(fm.fields)
-		fm.fields[fm.focus].focus()
+		fm.prevField()
 
 		return nil, false, false
 	case "ctrl+w":
@@ -375,6 +406,10 @@ func (fm *form) view() string {
 	b.WriteString("\n\n")
 
 	for i, f := range fm.fields {
+		if !f.isVisible() {
+			continue
+		}
+
 		focused := i == fm.focus
 
 		label := f.label

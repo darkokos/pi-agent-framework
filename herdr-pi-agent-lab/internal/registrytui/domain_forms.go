@@ -179,16 +179,25 @@ func versionFields(systemPromptHelp string, v *registry.AgentVersion) []*formFie
 		skillIsolate, skillPaths = v.Skills.Isolate, v.Skills.Paths
 	}
 
+	toolsModeField := newEnumField("Tools Mode", "", validate.ToolsModes, toolsMode)
+
+	toolNamesField := newPickerField("Tool Names", "comma-separated; not limited to the suggestions", "read,grep,find,ls", validate.BuiltinTools, strings.Join(toolNames, ","), true)
+	toolNamesField.visible = func() bool {
+		mode := toolsModeField.options[toolsModeField.enumIdx]
+
+		return mode == "allowlist" || mode == "denylist"
+	}
+
 	return []*formField{
 		newTextField("System Prompt File", systemPromptHelp, "/path/to/system-prompt.md", ""),
 		newModelPickerField("Model", "provider is set automatically from the chosen model", discoverModelEntries(), model, provider),
 		newEnumField("Thinking", "", thinkingOptions, thinking),
-		newEnumField("Tools Mode", "", validate.ToolsModes, toolsMode),
-		newPickerField("Tool Names", "comma-separated, used with allowlist|denylist; not limited to the suggestions", "read,grep,find,ls", validate.BuiltinTools, strings.Join(toolNames, ","), true),
-		newBoolField("Extensions Isolate", "pass --no-extensions and pin only the paths below", extIsolate),
-		newPickerField("Extension Paths", "comma-separated, used when isolated; not limited to the suggestions", "/path/to/extension.ts", discoverExtensionPaths(), strings.Join(extPaths, ","), true),
-		newBoolField("Skills Isolate", "pass --no-skills and pin only the paths below", skillIsolate),
-		newPickerField("Skill Paths", "comma-separated, used when isolated; not limited to the suggestions", "/path/to/skill", discoverSkillPaths(), strings.Join(skillPaths, ","), true),
+		toolsModeField,
+		toolNamesField,
+		newBoolField("Extensions Isolate", "disable automatically-discovered extensions; paths below always load either way", extIsolate),
+		newPickerField("Extension Paths", "comma-separated, always loaded regardless of isolate; not limited to the suggestions", "/path/to/extension.ts", discoverExtensionPaths(), strings.Join(extPaths, ","), true),
+		newBoolField("Skills Isolate", "disable automatically-discovered skills; paths below always load either way", skillIsolate),
+		newPickerField("Skill Paths", "comma-separated, always loaded regardless of isolate; not limited to the suggestions", "/path/to/skill", discoverSkillPaths(), strings.Join(skillPaths, ","), true),
 		newTextField("Notes", "", "", notes),
 	}
 }

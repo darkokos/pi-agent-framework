@@ -20,7 +20,11 @@ func completeToolsModes(_ *cobra.Command, _ []string, _ string) ([]string, cobra
 	return validate.ToolsModes, cobra.ShellCompDirectiveNoFileComp
 }
 
-func completeToolsList(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func completeToolsList(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if mode, _ := cmd.Flags().GetString("tools-mode"); mode != "allowlist" && mode != "denylist" {
+		return cobra.AppendActiveHelp(nil, "requires --tools-mode allowlist or denylist"), cobra.ShellCompDirectiveNoFileComp
+	}
+
 	prefix, last := "", toComplete
 	if idx := strings.LastIndex(toComplete, ","); idx >= 0 {
 		prefix, last = toComplete[:idx+1], toComplete[idx+1:]
@@ -51,33 +55,17 @@ func completeModels(_ *cobra.Command, _ []string, _ string) ([]string, cobra.She
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	byModel := map[string][]string{}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Model != entries[j].Model {
+			return entries[i].Model < entries[j].Model
+		}
+
+		return entries[i].Provider < entries[j].Provider
+	})
+
+	out := make([]string, 0, len(entries))
 	for _, e := range entries {
-		byModel[e.Model] = append(byModel[e.Model], e.Provider)
-	}
-
-	models := make([]string, 0, len(byModel))
-	for m := range byModel {
-		models = append(models, m)
-	}
-
-	sort.Strings(models)
-
-	var out []string
-	for _, m := range models {
-		providers := byModel[m]
-		sort.Strings(providers)
-
-		if len(providers) == 1 {
-			out = append(out, cobra.CompletionWithDesc(m, "provider: "+providers[0]))
-
-			continue
-		}
-
-		out = append(out, cobra.CompletionWithDesc(m, "ambiguous, offered by: "+strings.Join(providers, ", ")))
-		for _, p := range providers {
-			out = append(out, cobra.CompletionWithDesc(p+"/"+m, "explicit provider/model"))
-		}
+		out = append(out, e.Provider+"/"+e.Model)
 	}
 
 	return out, cobra.ShellCompDirectiveNoFileComp

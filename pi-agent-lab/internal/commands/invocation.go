@@ -45,16 +45,16 @@ func buildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath st
 
 	if version.Extensions.Isolate {
 		parts = append(parts, "--no-extensions")
-		for _, p := range version.Extensions.Paths {
-			parts = append(parts, "-e", shellQuote(p))
-		}
+	}
+	for _, p := range version.Extensions.Paths {
+		parts = append(parts, "-e", shellQuote(p))
 	}
 
 	if version.Skills.Isolate {
 		parts = append(parts, "--no-skills")
-		for _, p := range version.Skills.Paths {
-			parts = append(parts, "--skill", shellQuote(p))
-		}
+	}
+	for _, p := range version.Skills.Paths {
+		parts = append(parts, "--skill", shellQuote(p))
 	}
 
 	systemPromptFlag := "--system-prompt"
