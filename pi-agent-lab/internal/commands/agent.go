@@ -40,13 +40,44 @@ func parseAgentVersionRef(s string) (agentID, versionID string, err error) {
 }
 
 func newCreateAgentCommand() *cobra.Command {
-	var name, description string
+	var (
+		name              string
+		description       string
+		versionID         string
+		systemPromptFile  string
+		model             string
+		thinking          string
+		notes             string
+		toolsMode         string
+		toolNames         []string
+		extensionsIsolate bool
+		extensionPaths    []string
+		skillsIsolate     bool
+		skillPaths        []string
+	)
 
 	cmd := &cobra.Command{
 		Use:   "agent <agent-id>",
-		Short: "Register a new agent",
+		Short: "Register a new agent, along with its first version",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if !slices.Contains(validate.ToolsModes, toolsMode) {
+				return fmt.Errorf("--tools-mode must be one of %s, got %q", strings.Join(validate.ToolsModes, "|"), toolsMode)
+			}
+			if err := requireValidThinkingLevel(thinking); err != nil {
+				return err
+			}
+			resolvedModel, resolvedProvider, err := validate.ParseModel(model)
+			if err != nil {
+				return err
+			}
+			if err := requireValidPaths("extension", extensionPaths, validate.ExtensionPath); err != nil {
+				return err
+			}
+			if err := requireValidPaths("skill", skillPaths, validate.SkillPath); err != nil {
+				return err
+			}
+
 			root, err := registry.ResolveRoot()
 			if err != nil {
 				return err
@@ -57,7 +88,32 @@ func newCreateAgentCommand() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "created agent %q\n", agent.ID)
+			version, err := registry.CreateAgentVersion(root, agent.ID, versionID, registry.AgentVersionInput{
+				SystemPromptFile: systemPromptFile,
+				Model:            resolvedModel,
+				Provider:         resolvedProvider,
+				Thinking:         thinking,
+				Notes:            notes,
+				Tools: registry.ToolsConfig{
+					Mode:  toolsMode,
+					Names: toolNames,
+				},
+				Extensions: registry.ResourceIsolation{
+					Isolate: extensionsIsolate,
+					Paths:   extensionPaths,
+				},
+				Skills: registry.ResourceIsolation{
+					Isolate: skillsIsolate,
+					Paths:   skillPaths,
+				},
+			})
+			if err != nil {
+				_ = registry.DeleteAgent(root, agent.ID)
+
+				return err
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "created agent %q with version %q\n", agent.ID, version.VersionID)
 
 			return nil
 		},
@@ -65,6 +121,28 @@ func newCreateAgentCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&name, "name", "", "human-readable agent name")
 	cmd.Flags().StringVar(&description, "description", "", "what this agent is for")
+	cmd.Flags().StringVar(&versionID, "initial-version-id", "", "id for the agent's first version (required)")
+	_ = cmd.MarkFlagRequired("initial-version-id")
+	cmd.Flags().StringVar(&systemPromptFile, "system-prompt-file", "", "path to the system prompt text (required)")
+	cmd.Flags().StringVar(&model, "model", "", "model id, or provider/model when the model is offered by more than one provider (required)")
+	cmd.Flags().StringVar(&thinking, "thinking", "", "thinking level: off|minimal|low|medium|high|xhigh|max")
+	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
+	cmd.Flags().StringVar(&toolsMode, "tools-mode", "all", "all|none|extensions-only|allowlist|denylist")
+	cmd.Flags().StringSliceVar(&toolNames, "tools", nil, "comma-separated tool names, used with --tools-mode allowlist|denylist")
+	cmd.Flags().BoolVar(&extensionsIsolate, "extensions-isolate", false, "disable automatically-discovered extensions; extensions given via --extension always load either way")
+	cmd.Flags().StringArrayVar(&extensionPaths, "extension", nil, "extension path to always load, repeatable")
+	cmd.Flags().BoolVar(&skillsIsolate, "skills-isolate", false, "disable automatically-discovered skills; skills given via --skill always load either way")
+	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "skill path to always load, repeatable")
+	_ = cmd.MarkFlagRequired("system-prompt-file")
+	_ = cmd.MarkFlagRequired("model")
+
+	_ = cmd.RegisterFlagCompletionFunc("system-prompt-file", completeFilePaths)
+	_ = cmd.RegisterFlagCompletionFunc("model", completeModels)
+	_ = cmd.RegisterFlagCompletionFunc("thinking", completeThinkingLevels)
+	_ = cmd.RegisterFlagCompletionFunc("tools-mode", completeToolsModes)
+	_ = cmd.RegisterFlagCompletionFunc("tools", completeToolsList)
+	_ = cmd.RegisterFlagCompletionFunc("extension", completeExtensionPaths)
+	_ = cmd.RegisterFlagCompletionFunc("skill", completeSkillPaths)
 
 	return cmd
 }

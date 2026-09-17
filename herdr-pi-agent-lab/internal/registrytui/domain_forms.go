@@ -94,11 +94,12 @@ func validatePaths(paths []string, valid func(string) bool, flag string) error {
 }
 
 func newAgentCreateForm(root string) *form {
-	fields := []*formField{
+	fields := append([]*formField{
 		newTextField("ID", "unique, immutable", "e.g. code-reviewer", ""),
 		newTextField("Name", "", "human-readable name", ""),
 		newTextField("Description", "", "what this agent is for", ""),
-	}
+		newTextField("Initial Version ID", "unique within this agent, immutable", "e.g. v1", ""),
+	}, versionFields("required", nil)...)
 
 	return newForm("Create Agent", fields, func(f *form) error {
 		id := f.fields[0].text()
@@ -106,9 +107,32 @@ func newAgentCreateForm(root string) *form {
 			return fmt.Errorf("ID is required")
 		}
 
-		_, err := registry.CreateAgent(root, id, f.fields[1].text(), f.fields[2].text())
+		versionID := f.fields[3].text()
+		if versionID == "" {
+			return fmt.Errorf("Initial Version ID is required")
+		}
 
-		return err
+		sub := &form{fields: f.fields[4:]}
+		in, err := buildVersionInput(sub)
+		if err != nil {
+			return err
+		}
+		if in.SystemPromptFile == "" || in.Model == "" {
+			return fmt.Errorf("System Prompt File and Model are required")
+		}
+
+		agent, err := registry.CreateAgent(root, id, f.fields[1].text(), f.fields[2].text())
+		if err != nil {
+			return err
+		}
+
+		if _, err := registry.CreateAgentVersion(root, agent.ID, versionID, in); err != nil {
+			_ = registry.DeleteAgent(root, agent.ID)
+
+			return err
+		}
+
+		return nil
 	})
 }
 
