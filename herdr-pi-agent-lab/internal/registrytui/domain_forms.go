@@ -98,7 +98,7 @@ func newAgentCreateForm(root string) *form {
 		newTextField("ID", "unique, immutable", "e.g. code-reviewer", ""),
 		newTextField("Name", "", "human-readable name", ""),
 		newTextField("Description", "", "what this agent is for", ""),
-		newTextField("Initial Version ID", "unique within this agent, immutable", "e.g. v1", ""),
+		newTextField("Initial Version ID", "unique within this agent, immutable", "e.g. 1.0.0", ""),
 	}, versionFields("required", nil)...)
 
 	return newForm("Create Agent", fields, func(f *form) error {
@@ -270,7 +270,7 @@ func buildVersionInput(f *form) (registry.AgentVersionInput, error) {
 
 func newVersionCreateForm(root, agentID string) *form {
 	fields := append([]*formField{
-		newTextField("Version ID", "unique within this agent, immutable", "e.g. v1", ""),
+		newTextField("Version ID", "unique within this agent, immutable", "e.g. 1.0.1", ""),
 	}, versionFields("required", nil)...)
 
 	return newForm("Create Version for "+agentID, fields, func(f *form) error {
