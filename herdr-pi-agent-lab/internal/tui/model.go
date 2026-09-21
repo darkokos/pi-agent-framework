@@ -9,7 +9,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/execconfirm"
 	"github.com/darkokos/pi-agent-framework/pi-agent-compare"
+	invoke "github.com/darkokos/pi-agent-framework/pi-agent-invoke"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
@@ -21,6 +23,7 @@ const (
 	viewList view = iota
 	viewDetail
 	viewOverridePrompt
+	viewResumeConfirm
 )
 
 type taskRow struct {
@@ -37,6 +40,12 @@ type Model struct {
 	resolvedRoot  string
 	overrideRoot  *string
 	overrideInput textinput.Model
+
+	runCursor int
+	resume    *execconfirm.Model
+	status    string
+	width     int
+	height    int
 }
 
 func NewModel() Model {
@@ -54,6 +63,8 @@ type dataMsg struct {
 type errMsg struct{ err error }
 
 type tickMsg struct{}
+
+type resumeFinishedMsg struct{ err error }
 
 func tick() tea.Cmd {
 	return tea.Tick(pollInterval, func(time.Time) tea.Msg { return tickMsg{} })
@@ -120,6 +131,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 
 		return m, nil
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		if m.resume != nil {
+			c := *m.resume
+			c.Resize(m.width, m.height)
+			m.resume = &c
+		}
+
+		return m, nil
+	case resumeFinishedMsg:
+		m.resume = nil
+		m.view = viewDetail
+
+		if msg.err != nil {
+			m.err = msg.err
+		} else {
+			m.err = nil
+			m.status = "session closed"
+		}
+
+		return m, loadData(m.overrideRoot)
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -127,7 +159,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) unratedCount() int {
+	if m.cursor >= len(m.rows) || m.rows[m.cursor].group == nil {
+		return 0
+	}
+
+	return len(m.rows[m.cursor].group.Unrated)
+}
+
+func (m Model) handleResumeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+	}
+
+	c, cmd, action := m.resume.Update(msg)
+	m.resume = &c
+
+	switch action {
+	case execconfirm.Run:
+		return m, execconfirm.Exec(c.Line(), func(err error) tea.Msg { return resumeFinishedMsg{err: err} })
+	case execconfirm.Cancel:
+		m.resume = nil
+		m.view = viewDetail
+	}
+
+	return m, cmd
+}
+
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.view == viewResumeConfirm {
+		return m.handleResumeKey(msg)
+	}
+
 	if m.view == viewOverridePrompt {
 		switch msg.String() {
 		case "esc":
@@ -158,16 +222,32 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c", "q":
 		return m, tea.Quit
 	case "up", "k":
-		if m.cursor > 0 {
+		if m.view == viewDetail {
+			if m.runCursor > 0 {
+				m.runCursor--
+			}
+		} else if m.cursor > 0 {
 			m.cursor--
 		}
 	case "down", "j":
-		if m.cursor < len(m.rows)-1 {
+		if m.view == viewDetail {
+			if m.runCursor < m.unratedCount()-1 {
+				m.runCursor++
+			}
+		} else if m.cursor < len(m.rows)-1 {
 			m.cursor++
 		}
-	case "enter":
-		if m.view == viewList && len(m.rows) > 0 {
+	case "enter", "r":
+		if m.view == viewList && msg.String() == "enter" && len(m.rows) > 0 {
 			m.view = viewDetail
+			m.runCursor = 0
+			m.status = ""
+		} else if m.view == viewDetail && m.unratedCount() > 0 {
+			run := m.rows[m.cursor].group.Unrated[m.runCursor]
+			c := execconfirm.New(invoke.BuildResume(run.Cwd, run.SessionFile, run.AgentVersion, run.TaskId), m.width, m.height)
+			m.resume = &c
+			m.view = viewResumeConfirm
+			m.status = ""
 		}
 	case "esc", "backspace":
 		if m.view == viewDetail {
@@ -197,6 +277,7 @@ var (
 	dimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	helpStyle     = dimStyle
+	okStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 )
 
 func summarize(g *compare.TaskGroup) string {
@@ -264,18 +345,25 @@ func (m Model) viewDetail(b *strings.Builder) {
 	}
 
 	for i, r := range row.group.Rated {
-		fmt.Fprintf(b, "%d. %-28s outcome=%s rework=%s autonomy=%s  cost=$%.4f tokens=%.0f toolErrors=%d duration=%s\n",
-			i+1, strOrDash(r.AgentVersion),
+		fmt.Fprintf(b, "%d. %s  %s\n", i+1, r.SessionId, strOrDash(r.AgentVersion))
+		b.WriteString(dimStyle.Render(fmt.Sprintf("   outcome=%s rework=%s autonomy=%s  cost=$%.4f tokens=%.0f toolErrors=%d duration=%s",
 			intOrDash(r.Outcome.Outcome), intOrDash(r.Outcome.Rework), intOrDash(r.Outcome.Autonomy),
-			r.Usage.CostUsd, compare.TotalTokens(r), r.Activity.ToolErrors, durationOrDash(r.DurationMs))
+			r.Usage.CostUsd, compare.TotalTokens(r), r.Activity.ToolErrors, durationOrDash(r.DurationMs))))
+		b.WriteString("\n")
 	}
 
 	if len(row.group.Unrated) > 0 {
 		b.WriteString("\n")
 		b.WriteString(dimStyle.Render("needs rating:"))
 		b.WriteString("\n")
-		for _, r := range row.group.Unrated {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("-  %s", strOrDash(r.AgentVersion))))
+		for i, r := range row.group.Unrated {
+			line := fmt.Sprintf("%s  %s", r.SessionId, strOrDash(r.AgentVersion))
+			if i == m.runCursor {
+				b.WriteString(selectedStyle.Render("> " + line))
+			} else {
+				b.WriteString(dimStyle.Render("  " + line))
+			}
+
 			b.WriteString("\n")
 		}
 	}
@@ -301,6 +389,12 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 	}
 
+	if m.view == viewResumeConfirm {
+		b.WriteString(m.resume.View())
+
+		return b.String()
+	}
+
 	if m.view == viewOverridePrompt {
 		b.WriteString("Registry path (empty clears override):\n")
 		b.WriteString(m.overrideInput.View())
@@ -308,6 +402,11 @@ func (m Model) View() string {
 		b.WriteString(helpStyle.Render("enter confirm  esc cancel"))
 
 		return b.String()
+	}
+
+	if m.status != "" {
+		b.WriteString(okStyle.Render(m.status))
+		b.WriteString("\n\n")
 	}
 
 	if m.loading && len(m.rows) == 0 {
@@ -324,7 +423,11 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("j/k move  enter open  o override registry  q quit"))
+	if m.view == viewDetail {
+		b.WriteString(helpStyle.Render("j/k select unrated run  r resume it to rate  esc back  q quit"))
+	} else {
+		b.WriteString(helpStyle.Render("j/k move  enter open  o override registry  q quit"))
+	}
 
 	return b.String()
 }

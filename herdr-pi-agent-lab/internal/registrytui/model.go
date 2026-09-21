@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/runflow"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
@@ -29,6 +30,7 @@ const (
 	screenTaskDetail
 	screenForm
 	screenConfirm
+	screenRun
 )
 
 type confirmTarget int
@@ -72,6 +74,10 @@ type Model struct {
 	confirmMsg    string
 	confirmAction func() error
 	confirmTarget confirmTarget
+
+	flow   *runflow.Flow
+	width  int
+	height int
 
 	err     error
 	status  string
@@ -206,32 +212,6 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 		m.screen = screenForm
-	case "e":
-		m.prevScreen = screenList
-		if m.top == topAgents && len(m.agents) > 0 {
-			m.form = newAgentUpdateForm(m.root, m.agents[m.agentsCursor])
-			m.screen = screenForm
-		}
-		if m.top == topTasks && len(m.tasks) > 0 {
-			m.form = newTaskUpdateForm(m.root, m.tasks[m.tasksCursor])
-			m.screen = screenForm
-		}
-	case "d":
-		m.prevScreen = screenList
-		if m.top == topAgents && len(m.agents) > 0 {
-			agent := m.agents[m.agentsCursor]
-			m.confirmMsg = fmt.Sprintf("delete agent %q and all its versions?", agent.ID)
-			m.confirmAction = func() error { return registry.DeleteAgent(m.root, agent.ID) }
-			m.confirmTarget = confirmDeleteAgent
-			m.screen = screenConfirm
-		}
-		if m.top == topTasks && len(m.tasks) > 0 {
-			task := m.tasks[m.tasksCursor]
-			m.confirmMsg = fmt.Sprintf("delete task %q?", task.ID)
-			m.confirmAction = func() error { return registry.DeleteTask(m.root, task.ID) }
-			m.confirmTarget = confirmDeleteTask
-			m.screen = screenConfirm
-		}
 	}
 
 	return m, nil
@@ -292,6 +272,8 @@ func (m Model) handleVersionDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "backspace":
 		m.selectedVersion = nil
 		m.screen = screenAgentDetail
+	case "r":
+		return m.startRun(m.selectedAgent.ID, m.selectedVersion.VersionID, screenVersionDetail)
 	case "e":
 		m.prevScreen = screenVersionDetail
 		m.form = newVersionUpdateForm(m.root, m.selectedAgent.ID, m.selectedVersion)
@@ -315,6 +297,8 @@ func (m Model) handleTaskDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "backspace":
 		m.selectedTask = nil
 		m.screen = screenList
+	case "r":
+		return m.startRunForTask(m.selectedTask.ID, screenTaskDetail)
 	case "e":
 		m.prevScreen = screenTaskDetail
 		m.form = newTaskUpdateForm(m.root, m.selectedTask)
@@ -329,6 +313,64 @@ func (m Model) handleTaskDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m Model) startRun(agentID, versionID string, back screen) (tea.Model, tea.Cmd) {
+	if len(m.tasks) == 0 {
+		m.err = fmt.Errorf("no tasks registered yet - add one from the Tasks tab first")
+
+		return m, nil
+	}
+
+	return m.openFlow(runflow.New(m.root, agentID, versionID, m.tasks, m.width, m.height), back)
+}
+
+func (m Model) startRunForTask(taskID string, back screen) (tea.Model, tea.Cmd) {
+	f := runflow.NewForTask(m.root, taskID, m.agents, m.width, m.height)
+	if !f.HasChoices() {
+		m.err = fmt.Errorf("no agent versions registered yet - add one from the Agents tab first")
+
+		return m, nil
+	}
+
+	return m.openFlow(f, back)
+}
+
+func (m Model) openFlow(f runflow.Flow, back screen) (tea.Model, tea.Cmd) {
+	m.flow = &f
+	m.prevScreen = back
+	m.err = nil
+	m.screen = screenRun
+
+	return m, nil
+}
+
+func (m Model) updateFlow(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, isKey := msg.(tea.KeyMsg); isKey {
+		m.err, m.status = nil, ""
+	}
+
+	f, cmd, outcome := m.flow.Update(msg)
+	m.flow = &f
+
+	switch outcome {
+	case runflow.Cancelled:
+		m.flow = nil
+		m.screen = m.prevScreen
+	case runflow.Finished:
+		m.flow = nil
+		m.screen = m.prevScreen
+
+		if f.RunErr != nil {
+			m.err = f.RunErr
+		} else {
+			m.status = "run finished"
+		}
+
+		return m, tea.Batch(cmd, loadData())
+	}
+
+	return m, cmd
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -415,6 +457,24 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.screen == screenRun {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			if k := msg.String(); k == "ctrl+c" || k == "q" {
+				return m, tea.Quit
+			}
+
+			return m.updateFlow(msg)
+		case tea.WindowSizeMsg:
+			m.width, m.height = msg.Width, msg.Height
+
+			return m.updateFlow(msg)
+		case tickMsg, dataMsg, errMsg:
+		default:
+			return m.updateFlow(msg)
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tickMsg:
 		return m, tea.Batch(loadData(), tick())
@@ -440,6 +500,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		m.loading = false
 		m.err = msg.err
+
+		return m, nil
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
 
 		return m, nil
 	case editorDoneMsg:
@@ -513,11 +577,11 @@ func (m Model) helpText() string {
 	case screenAgentDetail:
 		return "j/k move  enter open version  n new version  e edit agent  d delete agent  esc back  q quit"
 	case screenVersionDetail:
-		return "e edit  d delete  esc back  q quit"
+		return "r run  e edit  d delete  esc back  q quit"
 	case screenTaskDetail:
-		return "e edit  d delete  esc back  q quit"
+		return "r run  e edit  d delete  esc back  q quit"
 	default:
-		return "tab switch agents/tasks  j/k move  enter open  n new  e edit  d delete  q quit"
+		return "tab switch agents/tasks  j/k move  enter open  n new  q quit"
 	}
 }
 
@@ -580,6 +644,12 @@ func (m Model) View() string {
 	if m.status != "" {
 		b.WriteString(okStyle.Render(m.status))
 		b.WriteString("\n\n")
+	}
+
+	if m.screen == screenRun {
+		b.WriteString(m.flow.View())
+
+		return b.String()
 	}
 
 	if m.screen == screenForm {

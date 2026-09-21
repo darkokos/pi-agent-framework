@@ -2,15 +2,13 @@ package runtui
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	invoke "github.com/darkokos/pi-agent-framework/pi-agent-invoke"
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/runflow"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
@@ -21,8 +19,7 @@ type screen int
 const (
 	screenAgent screen = iota
 	screenVersion
-	screenTask
-	screenConfirm
+	screenRun
 )
 
 var (
@@ -44,14 +41,9 @@ type Model struct {
 
 	agentsCursor   int
 	versionsCursor int
-	tasksCursor    int
 
-	selectedAgent   *registry.Agent
-	selectedVersion string
-	selectedTask    string
-
-	invocationLine string
-	invocationView viewport.Model
+	selectedAgent *registry.Agent
+	flow          *runflow.Flow
 
 	width  int
 	height int
@@ -71,10 +63,8 @@ type dataMsg struct {
 
 type errMsg struct{ err error }
 
-type execFinishedMsg struct{ err error }
-
 func NewModel() Model {
-	return Model{loading: true, invocationView: viewport.New(80, 10)}
+	return Model{loading: true}
 }
 
 func tick() tea.Cmd {
@@ -122,39 +112,9 @@ func clampIdx(i, n int) int {
 
 func (m *Model) clamp() {
 	m.agentsCursor = clampIdx(m.agentsCursor, len(m.agents))
-	m.tasksCursor = clampIdx(m.tasksCursor, len(m.tasks))
 	if m.selectedAgent != nil {
 		m.versionsCursor = clampIdx(m.versionsCursor, len(m.selectedAgent.Versions))
 	}
-}
-
-func (m *Model) layoutInvocation() {
-	width := m.width
-	if width <= 0 {
-		width = 80
-	}
-
-	height := max(3, m.height-7)
-
-	m.invocationView.Width = width
-	m.invocationView.Height = height
-	m.invocationView.SetContent(lipgloss.NewStyle().Width(width).Render(m.invocationLine))
-}
-
-func (m Model) buildInvocation() (string, error) {
-	version, err := registry.GetAgentVersion(m.root, m.selectedAgent.ID, m.selectedVersion)
-	if err != nil {
-		return "", err
-	}
-
-	systemPrompt, err := registry.ReadVersionSystemPrompt(m.root, m.selectedAgent.ID, m.selectedVersion)
-	if err != nil {
-		return "", err
-	}
-
-	taskPromptPath := registry.TaskPromptPath(m.root, m.selectedTask)
-
-	return invoke.BuildInvocation(m.selectedAgent.ID, m.selectedVersion, m.selectedTask, systemPrompt, taskPromptPath, version)
 }
 
 func (m Model) handleAgentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -211,78 +171,14 @@ func (m Model) handleVersionKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			m.selectedVersion = m.selectedAgent.Versions[m.versionsCursor]
-			m.tasksCursor = 0
+			f := runflow.New(m.root, m.selectedAgent.ID, m.selectedAgent.Versions[m.versionsCursor], m.tasks, m.width, m.height)
+			m.flow = &f
 			m.err = nil
-			m.screen = screenTask
+			m.screen = screenRun
 		}
 	}
 
 	return m, nil
-}
-
-func (m Model) handleTaskKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.status = ""
-
-	switch msg.String() {
-	case "esc", "backspace":
-		m.selectedVersion = ""
-		m.screen = screenVersion
-	case "up", "k":
-		if m.tasksCursor > 0 {
-			m.tasksCursor--
-		}
-	case "down", "j":
-		if m.tasksCursor < len(m.tasks)-1 {
-			m.tasksCursor++
-		}
-	case "enter":
-		if len(m.tasks) > 0 {
-			m.selectedTask = m.tasks[m.tasksCursor].ID
-
-			line, err := m.buildInvocation()
-			if err != nil {
-				m.err = err
-				m.selectedTask = ""
-
-				return m, nil
-			}
-
-			m.invocationLine = line
-			m.err = nil
-			m.screen = screenConfirm
-			m.layoutInvocation()
-			m.invocationView.GotoTop()
-		}
-	}
-
-	return m, nil
-}
-
-func runInvocation(line string) tea.Cmd {
-	c := exec.Command("sh", "-c", line)
-
-	return tea.ExecProcess(c, func(err error) tea.Msg {
-		return execFinishedMsg{err: err}
-	})
-}
-
-func (m Model) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "y", "enter":
-		return m, runInvocation(m.invocationLine)
-	case "n", "esc":
-		m.selectedTask = ""
-		m.invocationLine = ""
-		m.screen = screenTask
-
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.invocationView, cmd = m.invocationView.Update(msg)
-
-	return m, cmd
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -296,13 +192,34 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleAgentKey(msg)
 	case screenVersion:
 		return m.handleVersionKey(msg)
-	case screenTask:
-		return m.handleTaskKey(msg)
-	case screenConfirm:
-		return m.handleConfirmKey(msg)
 	}
 
 	return m, nil
+}
+
+func (m Model) updateFlow(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, isKey := msg.(tea.KeyMsg); isKey {
+		m.err, m.status = nil, ""
+	}
+
+	f, cmd, outcome := m.flow.Update(msg)
+	m.flow = &f
+
+	switch outcome {
+	case runflow.Cancelled:
+		m.flow = nil
+		m.screen = screenVersion
+	case runflow.Finished:
+		if f.RunErr != nil {
+			m.err, m.status = f.RunErr, ""
+		} else {
+			m.err, m.status = nil, "run finished"
+		}
+
+		return m, tea.Batch(cmd, loadData())
+	}
+
+	return m, cmd
 }
 
 func findAgent(agents []*registry.Agent, id string) *registry.Agent {
@@ -316,6 +233,24 @@ func findAgent(agents []*registry.Agent, id string) *registry.Agent {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.screen == screenRun {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			if k := msg.String(); k == "ctrl+c" || k == "q" {
+				return m, tea.Quit
+			}
+
+			return m.updateFlow(msg)
+		case tea.WindowSizeMsg:
+			m.width, m.height = msg.Width, msg.Height
+
+			return m.updateFlow(msg)
+		case tickMsg, dataMsg, errMsg:
+		default:
+			return m.updateFlow(msg)
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tickMsg:
 		return m, tea.Batch(loadData(), tick())
@@ -341,26 +276,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 
 		return m, nil
-	case execFinishedMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			m.status = ""
-		} else {
-			m.err = nil
-			m.status = "run finished"
-		}
-
-		m.screen = screenTask
-		m.invocationLine = ""
-		m.selectedTask = ""
-
-		return m, loadData()
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		if m.screen == screenConfirm {
-			m.layoutInvocation()
-		}
+		m.width, m.height = msg.Width, msg.Height
 
 		return m, nil
 	case tea.KeyMsg:
@@ -403,35 +320,10 @@ func (m Model) viewVersion(b *strings.Builder) {
 	}
 }
 
-func (m Model) viewTask(b *strings.Builder) {
-	fmt.Fprintf(b, "Agent version: %s@%s\n\n", m.selectedAgent.ID, m.selectedVersion)
-
-	if len(m.tasks) == 0 {
-		b.WriteString(dimStyle.Render("no tasks registered yet — add one from the Registry pane"))
-		b.WriteString("\n")
-
-		return
-	}
-
-	for i, t := range m.tasks {
-		line := fmt.Sprintf("%s  %s", t.ID, t.PromptFile)
-		writeRow(b, line, i == m.tasksCursor)
-	}
-}
-
-func (m Model) viewConfirm(b *strings.Builder) {
-	b.WriteString("about to run:\n\n")
-	b.WriteString(m.invocationView.View())
-	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Render("y confirm  n/esc cancel  j/k scroll"))
-}
-
 func (m Model) helpText() string {
 	switch m.screen {
 	case screenVersion:
 		return "j/k move  enter pick version  esc back  q quit"
-	case screenTask:
-		return "j/k move  enter pick task  esc back  q quit"
 	default:
 		return "j/k move  enter pick agent  q quit"
 	}
@@ -447,6 +339,12 @@ func (m Model) View() string {
 
 	b.WriteString("\n\n")
 
+	if m.screen == screenRun && m.flow.Confirming() {
+		b.WriteString(m.flow.View())
+
+		return b.String()
+	}
+
 	if m.err != nil {
 		b.WriteString(errStyle.Render(fmt.Sprintf("error: %v", m.err)))
 		b.WriteString("\n\n")
@@ -456,14 +354,14 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 	}
 
-	if m.screen == screenConfirm {
-		m.viewConfirm(&b)
+	if m.loading && len(m.agents) == 0 {
+		b.WriteString("loading...\n")
 
 		return b.String()
 	}
 
-	if m.loading && len(m.agents) == 0 {
-		b.WriteString("loading...\n")
+	if m.screen == screenRun {
+		b.WriteString(m.flow.View())
 
 		return b.String()
 	}
@@ -471,8 +369,6 @@ func (m Model) View() string {
 	switch m.screen {
 	case screenVersion:
 		m.viewVersion(&b)
-	case screenTask:
-		m.viewTask(&b)
 	default:
 		m.viewAgent(&b)
 	}

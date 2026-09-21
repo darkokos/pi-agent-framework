@@ -14,17 +14,22 @@
     "endReason",
     "agentVersion",
     "taskId",
-    "runId",
     "models",
     "usage",
     "activity",
     "outcome"
   ],
+  "if": {
+    "properties": { "schemaVersion": { "const": 1 } },
+    "required": ["schemaVersion"]
+  },
+  "then": { "required": ["runId"] },
+  "else": { "properties": { "runId": false } },
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "const": 1,
-      "description": "Bump this and the schema together when the shape changes; never widen silently."
+      "enum": [1, 2],
+      "description": "Bump this and the schema together when the shape changes; never widen silently. 1: original shape, runId required. 2: runId removed; a run is identified by sessionId."
     },
     "sessionId": { "type": "string" },
     "sessionFile": { "type": "string" },
@@ -43,7 +48,8 @@
     },
     "runId": {
       "type": ["string", "null"],
-      "description": "Set via PI_RUN_ID env var."
+      "deprecated": true,
+      "description": "Only present in schemaVersion 1 records, where it is required. Removed in version 2: a run is identified by sessionId."
     },
     "models": {
       "type": "array",
@@ -60,7 +66,14 @@
     "usage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["input", "output", "cacheRead", "cacheWrite", "costUsd", "unmeteredMessages"],
+      "required": [
+        "input",
+        "output",
+        "cacheRead",
+        "cacheWrite",
+        "costUsd",
+        "unmeteredMessages"
+      ],
       "properties": {
         "input": { "type": "number", "minimum": 0 },
         "output": { "type": "number", "minimum": 0 },
@@ -73,7 +86,14 @@
     "activity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["assistantMessages", "userMessages", "toolCalls", "toolErrors", "byTool", "compactions"],
+      "required": [
+        "assistantMessages",
+        "userMessages",
+        "toolCalls",
+        "toolErrors",
+        "byTool",
+        "compactions"
+      ],
       "properties": {
         "assistantMessages": { "type": "integer", "minimum": 0 },
         "userMessages": { "type": "integer", "minimum": 0 },

@@ -13,10 +13,11 @@ func shellQuote(s string) string {
 
 func BuildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath string, version *registry.AgentVersion) (string, error) {
 	parts := []string{
+		`id=$(uuidgen) &&`,
 		"PI_AGENT_VERSION=" + shellQuote(agentID+"@"+versionID),
 		"PI_TASK_ID=" + shellQuote(taskID),
-		"PI_RUN_ID=$(uuidgen)",
 		"pi",
+		"--session-id", `"$id"`,
 		"--model", shellQuote(version.Model),
 	}
 
@@ -65,4 +66,19 @@ func BuildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath st
 	parts = append(parts, shellQuote("@"+taskPromptPath))
 
 	return strings.Join(parts, " "), nil
+}
+
+func BuildResume(cwd, sessionFile string, agentVersion, taskID *string) string {
+	parts := []string{"cd", shellQuote(cwd), "&&"}
+
+	if agentVersion != nil {
+		parts = append(parts, "PI_AGENT_VERSION="+shellQuote(*agentVersion))
+	}
+	if taskID != nil {
+		parts = append(parts, "PI_TASK_ID="+shellQuote(*taskID))
+	}
+
+	parts = append(parts, "pi", "--session", shellQuote(sessionFile))
+
+	return strings.Join(parts, " ")
 }

@@ -40,10 +40,10 @@ func printTaskGroup(w io.Writer, group *compare.TaskGroup) {
 
 	if len(group.Rated) > 0 {
 		tw := format.NewTabWriter(w)
-		fmt.Fprintln(tw, "  RANK\tAGENT@VERSION\tOUTCOME\tREWORK\tAUTONOMY\tCOST\tTOKENS\tTOOL ERRORS\tDURATION")
+		fmt.Fprintln(tw, "  RANK\tSESSION\tAGENT@VERSION\tOUTCOME\tREWORK\tAUTONOMY\tCOST\tTOKENS\tTOOL ERRORS\tDURATION")
 		for i, r := range group.Rated {
-			fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\t%s\t$%.4f\t%.0f\t%d\t%s\n",
-				i+1, strOrDash(r.AgentVersion),
+			fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\t%s\t%s\t$%.4f\t%.0f\t%d\t%s\n",
+				i+1, r.SessionId, strOrDash(r.AgentVersion),
 				intOrDash(r.Outcome.Outcome), intOrDash(r.Outcome.Rework), intOrDash(r.Outcome.Autonomy),
 				r.Usage.CostUsd, compare.TotalTokens(r), r.Activity.ToolErrors, durationOrDash(r.DurationMs),
 			)
@@ -53,9 +53,12 @@ func printTaskGroup(w io.Writer, group *compare.TaskGroup) {
 
 	if len(group.Unrated) > 0 {
 		fmt.Fprintln(w, "  UNRATED (needs /rate)")
+		tw := format.NewTabWriter(w)
+		fmt.Fprintln(tw, "    SESSION\tAGENT@VERSION")
 		for _, r := range group.Unrated {
-			fmt.Fprintf(w, "    %s\n", strOrDash(r.AgentVersion))
+			fmt.Fprintf(tw, "    %s\t%s\n", r.SessionId, strOrDash(r.AgentVersion))
 		}
+		tw.Flush()
 	}
 }
 

@@ -33,7 +33,7 @@ type Rating = Omit<
 > &
   Required<Pick<SessionRecord["outcome"], "outcome" | "ratedAt" | "source">>;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const RECORD_DIR =
   process.env.PI_SESSION_RECORDS ?? join(homedir(), ".pi", "agent", "records");
 
@@ -132,7 +132,6 @@ export default function (pi: ExtensionAPI) {
 
       agentVersion: process.env.PI_AGENT_VERSION ?? null,
       taskId: process.env.PI_TASK_ID ?? null,
-      runId: process.env.PI_RUN_ID ?? null,
 
       models: [],
 
