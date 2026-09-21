@@ -34,8 +34,9 @@ type openResultMsg struct {
 }
 
 var items = []item{
-	{"Compare", "compare"},
+	{"Run", "run"},
 	{"Registry", "registry"},
+	{"Results", "compare"},
 	{"Config", "config"},
 }
 

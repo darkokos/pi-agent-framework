@@ -7,6 +7,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/darkokos/pi-agent-framework/pi-agent-compare v0.0.0-00010101000000-000000000000
+	github.com/darkokos/pi-agent-framework/pi-agent-invoke v0.0.0-00010101000000-000000000000
 	github.com/darkokos/pi-agent-framework/pi-agent-registry v0.0.0-00010101000000-000000000000
 	github.com/darkokos/pi-agent-framework/pi-agent-validate v0.0.0-00010101000000-000000000000
 )
@@ -40,6 +41,8 @@ require (
 replace github.com/darkokos/pi-agent-framework/pi-session-schema => ../pi-session-schema
 
 replace github.com/darkokos/pi-agent-framework/pi-agent-compare => ../pi-agent-compare
+
+replace github.com/darkokos/pi-agent-framework/pi-agent-invoke => ../pi-agent-invoke
 
 replace github.com/darkokos/pi-agent-framework/pi-agent-registry => ../pi-agent-registry
 

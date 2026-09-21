@@ -1,78 +1,37 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	invoke "github.com/darkokos/pi-agent-framework/pi-agent-invoke"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
+func confirm(cmd *cobra.Command, prompt string) (bool, error) {
+	fmt.Fprint(cmd.OutOrStdout(), prompt)
 
-func buildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath string, version *registry.AgentVersion) (string, error) {
-	parts := []string{
-		"PI_AGENT_VERSION=" + shellQuote(agentID+"@"+versionID),
-		"PI_TASK_ID=" + shellQuote(taskID),
-		"PI_RUN_ID=$(uuidgen)",
-		"pi",
-		"--model", shellQuote(version.Model),
+	line, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	if err != nil {
+		return false, err
 	}
 
-	if version.Provider != "" {
-		parts = append(parts, "--provider", shellQuote(version.Provider))
-	}
-	if version.Thinking != "" {
-		parts = append(parts, "--thinking", shellQuote(version.Thinking))
-	}
-
-	switch version.Tools.Mode {
-	case "", "all":
-	case "none":
-		parts = append(parts, "--no-tools")
-	case "extensions-only":
-		parts = append(parts, "--no-builtin-tools")
-	case "allowlist":
-		parts = append(parts, "--tools", shellQuote(strings.Join(version.Tools.Names, ",")))
-	case "denylist":
-		parts = append(parts, "--exclude-tools", shellQuote(strings.Join(version.Tools.Names, ",")))
+	switch strings.TrimSpace(line) {
+	case "y", "Y", "yes", "YES":
+		return true, nil
 	default:
-		return "", fmt.Errorf("unknown tools mode %q", version.Tools.Mode)
+		return false, nil
 	}
-
-	if version.Extensions.Isolate {
-		parts = append(parts, "--no-extensions")
-	}
-	for _, p := range version.Extensions.Paths {
-		parts = append(parts, "-e", shellQuote(p))
-	}
-
-	if version.Skills.Isolate {
-		parts = append(parts, "--no-skills")
-	}
-	for _, p := range version.Skills.Paths {
-		parts = append(parts, "--skill", shellQuote(p))
-	}
-
-	systemPromptFlag := "--system-prompt"
-	if version.SystemPrompt.Mode == "append" {
-		systemPromptFlag = "--append-system-prompt"
-	}
-
-	parts = append(parts, systemPromptFlag, shellQuote(systemPrompt))
-
-	parts = append(parts, shellQuote("@"+taskPromptPath))
-
-	return strings.Join(parts, " "), nil
 }
 
 func NewInvocationCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "invocation <agent-id>@<version-id> <task-id>",
-		Short: "Print (never run) the pi invocation for an agent version + task",
+		Short: "Run an agent version against a task, after confirming the command",
 		Args:  cobra.ExactArgs(2),
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) == 0 {
@@ -109,14 +68,29 @@ func NewInvocationCommand() *cobra.Command {
 			}
 
 			taskPromptPath := registry.TaskPromptPath(root, taskID)
-			line, err := buildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath, version)
+			line, err := invoke.BuildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath, version)
 			if err != nil {
 				return err
 			}
 
 			fmt.Fprintln(cmd.OutOrStdout(), line)
 
-			return nil
+			ok, err := confirm(cmd, "run this command? [y/N] ")
+			if err != nil {
+				return err
+			}
+			if !ok {
+				fmt.Fprintln(cmd.OutOrStdout(), "aborted")
+
+				return nil
+			}
+
+			run := exec.Command("sh", "-c", line)
+			run.Stdin = cmd.InOrStdin()
+			run.Stdout = cmd.OutOrStdout()
+			run.Stderr = cmd.ErrOrStderr()
+
+			return run.Run()
 		},
 	}
 }
