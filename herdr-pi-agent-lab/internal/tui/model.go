@@ -275,7 +275,8 @@ func (m Model) viewDetail(b *strings.Builder) {
 		b.WriteString(dimStyle.Render("needs rating:"))
 		b.WriteString("\n")
 		for _, r := range row.group.Unrated {
-			b.WriteString(dimStyle.Render(fmt.Sprintf("-  %s\n", strOrDash(r.AgentVersion))))
+			b.WriteString(dimStyle.Render(fmt.Sprintf("-  %s", strOrDash(r.AgentVersion))))
+			b.WriteString("\n")
 		}
 	}
 }
