@@ -99,7 +99,8 @@ func newAgentCreateForm(root string) *form {
 		newTextField("Name", "", "human-readable name", ""),
 		newTextField("Description", "", "what this agent is for", ""),
 		newTextField("Initial Version ID", "unique within this agent, immutable", "e.g. 1.0.0", ""),
-	}, versionFields("required", nil)...)
+		newPathField("System Prompt File", "required; paths start from your home directory", "~/system-prompt.md", "~/"),
+	}, versionSettingsFields(nil)...)
 
 	return newForm("Create Agent", fields, func(f *form) error {
 		id := f.fields[0].text()
@@ -112,13 +113,13 @@ func newAgentCreateForm(root string) *form {
 			return fmt.Errorf("Initial Version ID is required")
 		}
 
-		sub := &form{fields: f.fields[4:]}
-		in, err := buildVersionInput(sub)
+		in, err := buildVersionInput(&form{fields: f.fields[5:]})
 		if err != nil {
 			return err
 		}
-		if in.SystemPromptFile == "" || in.Model == "" {
-			return fmt.Errorf("System Prompt File and Model are required")
+
+		if in.SystemPromptFile, err = requireFile(f.fields[4]); err != nil {
+			return err
 		}
 
 		agent, err := registry.CreateAgent(root, id, f.fields[1].text(), f.fields[2].text())
@@ -155,18 +156,22 @@ func newAgentUpdateForm(root string, agent *registry.Agent) *form {
 func newTaskCreateForm(root string) *form {
 	fields := []*formField{
 		newTextField("ID", "unique, immutable", "e.g. refactor-auth", ""),
-		newTextField("Prompt File", "path to the task prompt text", "/path/to/prompt.md", ""),
+		newPathField("Prompt File", "required; paths start from your home directory", "~/prompt.md", "~/"),
 		newTextField("Notes", "", "freeform notes", ""),
 	}
 
 	return newForm("Create Task", fields, func(f *form) error {
 		id := f.fields[0].text()
-		promptFile := f.fields[1].text()
-		if id == "" || promptFile == "" {
-			return fmt.Errorf("ID and Prompt File are required")
+		if id == "" {
+			return fmt.Errorf("ID is required")
 		}
 
-		_, err := registry.CreateTask(root, id, promptFile, f.fields[2].text())
+		promptFile, err := requireFile(f.fields[1])
+		if err != nil {
+			return err
+		}
+
+		_, err = registry.CreateTask(root, id, promptFile, f.fields[2].text())
 
 		return err
 	})
@@ -174,14 +179,18 @@ func newTaskCreateForm(root string) *form {
 
 func newTaskUpdateForm(root string, task *registry.Task) *form {
 	fields := []*formField{
-		newTextField("Prompt File", "leave empty to keep current content, or enter a path to replace it", "/path/to/new-prompt.md", ""),
+		newEditorField("Prompt", "edit the stored task prompt in your editor", func() (string, error) {
+			data, err := os.ReadFile(registry.TaskPromptPath(root, task.ID))
+
+			return string(data), err
+		}),
 		newTextField("Notes", "", "", task.Notes),
 	}
 
 	return newForm("Update Task "+task.ID, fields, func(f *form) error {
 		task.Notes = f.fields[1].text()
 
-		_, err := registry.ReplaceTask(root, task, f.fields[0].text())
+		_, err := registry.ReplaceTask(root, task, f.fields[0].editedSource())
 
 		return err
 	})
@@ -189,7 +198,7 @@ func newTaskUpdateForm(root string, task *registry.Task) *form {
 
 var thinkingOptions = append([]string{""}, validate.ThinkingLevels...)
 
-func versionFields(systemPromptHelp string, v *registry.AgentVersion) []*formField {
+func versionSettingsFields(v *registry.AgentVersion) []*formField {
 	model, provider, thinking, notes := "", "", "", ""
 	toolsMode := validate.ToolsModes[0]
 	var toolNames, extPaths, skillPaths []string
@@ -213,7 +222,6 @@ func versionFields(systemPromptHelp string, v *registry.AgentVersion) []*formFie
 	}
 
 	return []*formField{
-		newTextField("System Prompt File", systemPromptHelp, "/path/to/system-prompt.md", ""),
 		newModelPickerField("Model", "provider is set automatically from the chosen model", discoverModelEntries(), model, provider),
 		newEnumField("Thinking", "", thinkingOptions, thinking),
 		toolsModeField,
@@ -227,42 +235,41 @@ func versionFields(systemPromptHelp string, v *registry.AgentVersion) []*formFie
 }
 
 func buildVersionInput(f *form) (registry.AgentVersionInput, error) {
-	modelField := f.fields[1]
+	modelField := f.fields[0]
 	if modelField.resolvedModel == "" {
 		return registry.AgentVersionInput{}, fmt.Errorf("Model: select an entry from the list (type to search, enter to confirm)")
 	}
 
-	thinking := f.fields[2].options[f.fields[2].enumIdx]
+	thinking := f.fields[1].options[f.fields[1].enumIdx]
 	if thinking != "" && !validate.ThinkingLevel(thinking) {
 		return registry.AgentVersionInput{}, fmt.Errorf("invalid thinking level %q", thinking)
 	}
 
-	extPaths := splitCommaList(f.fields[6].text())
+	extPaths := splitCommaList(f.fields[5].text())
 	if err := validatePaths(extPaths, validate.ExtensionPath, "extension path"); err != nil {
 		return registry.AgentVersionInput{}, err
 	}
 
-	skillPaths := splitCommaList(f.fields[8].text())
+	skillPaths := splitCommaList(f.fields[7].text())
 	if err := validatePaths(skillPaths, validate.SkillPath, "skill path"); err != nil {
 		return registry.AgentVersionInput{}, err
 	}
 
 	return registry.AgentVersionInput{
-		SystemPromptFile: f.fields[0].text(),
-		Model:            modelField.resolvedModel,
-		Provider:         modelField.resolvedProvider,
-		Thinking:         thinking,
-		Notes:            f.fields[9].text(),
+		Model:    modelField.resolvedModel,
+		Provider: modelField.resolvedProvider,
+		Thinking: thinking,
+		Notes:    f.fields[8].text(),
 		Tools: registry.ToolsConfig{
-			Mode:  f.fields[3].options[f.fields[3].enumIdx],
-			Names: splitCommaList(f.fields[4].text()),
+			Mode:  f.fields[2].options[f.fields[2].enumIdx],
+			Names: splitCommaList(f.fields[3].text()),
 		},
 		Extensions: registry.ResourceIsolation{
-			Isolate: f.fields[5].boolVal,
+			Isolate: f.fields[4].boolVal,
 			Paths:   extPaths,
 		},
 		Skills: registry.ResourceIsolation{
-			Isolate: f.fields[7].boolVal,
+			Isolate: f.fields[6].boolVal,
 			Paths:   skillPaths,
 		},
 	}, nil
@@ -271,7 +278,8 @@ func buildVersionInput(f *form) (registry.AgentVersionInput, error) {
 func newVersionCreateForm(root, agentID string) *form {
 	fields := append([]*formField{
 		newTextField("Version ID", "unique within this agent, immutable", "e.g. 1.0.1", ""),
-	}, versionFields("required", nil)...)
+		newPathField("System Prompt File", "required; paths start from your home directory", "~/system-prompt.md", "~/"),
+	}, versionSettingsFields(nil)...)
 
 	return newForm("Create Version for "+agentID, fields, func(f *form) error {
 		versionID := f.fields[0].text()
@@ -279,13 +287,13 @@ func newVersionCreateForm(root, agentID string) *form {
 			return fmt.Errorf("Version ID is required")
 		}
 
-		sub := &form{fields: f.fields[1:]}
-		in, err := buildVersionInput(sub)
+		in, err := buildVersionInput(&form{fields: f.fields[2:]})
 		if err != nil {
 			return err
 		}
-		if in.SystemPromptFile == "" || in.Model == "" {
-			return fmt.Errorf("System Prompt File and Model are required")
+
+		if in.SystemPromptFile, err = requireFile(f.fields[1]); err != nil {
+			return err
 		}
 
 		_, err = registry.CreateAgentVersion(root, agentID, versionID, in)
@@ -295,10 +303,14 @@ func newVersionCreateForm(root, agentID string) *form {
 }
 
 func newVersionUpdateForm(root, agentID string, v *registry.AgentVersion) *form {
-	fields := versionFields("leave empty to keep current content, or enter a path to replace it", v)
+	fields := append([]*formField{
+		newEditorField("System Prompt", "edit the stored system prompt in your editor", func() (string, error) {
+			return registry.ReadVersionSystemPrompt(root, agentID, v.VersionID)
+		}),
+	}, versionSettingsFields(v)...)
 
 	return newForm(fmt.Sprintf("Update Version %s@%s", agentID, v.VersionID), fields, func(f *form) error {
-		in, err := buildVersionInput(f)
+		in, err := buildVersionInput(&form{fields: f.fields[1:]})
 		if err != nil {
 			return err
 		}
@@ -306,7 +318,7 @@ func newVersionUpdateForm(root, agentID string, v *registry.AgentVersion) *form 
 		v.Model, v.Provider, v.Thinking, v.Notes = in.Model, in.Provider, in.Thinking, in.Notes
 		v.Tools, v.Extensions, v.Skills = in.Tools, in.Extensions, in.Skills
 
-		_, err = registry.ReplaceAgentVersion(root, agentID, v.VersionID, v, in.SystemPromptFile)
+		_, err = registry.ReplaceAgentVersion(root, agentID, v.VersionID, v, f.fields[0].editedSource())
 
 		return err
 	})

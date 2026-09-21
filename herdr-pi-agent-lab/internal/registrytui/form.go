@@ -19,6 +19,8 @@ const (
 	kindBool
 	kindPicker
 	kindModelPicker
+	kindPath
+	kindEditor
 )
 
 const pickerVisibleLimit = 8
@@ -46,6 +48,12 @@ type formField struct {
 	resolvedProvider string
 
 	visible func() bool
+
+	editorLoad     func() (string, error)
+	editorOriginal string
+	editorAccepted string
+	editorTemp     string
+	editorChanged  bool
 }
 
 type form struct {
@@ -183,14 +191,18 @@ func (f *formField) applyModelChoice(e validate.ModelEntry) {
 
 func (f *formField) text() string { return strings.TrimSpace(f.input.Value()) }
 
+func (f *formField) hasInput() bool {
+	return f.kind == kindText || f.kind == kindPicker || f.kind == kindModelPicker || f.kind == kindPath
+}
+
 func (f *formField) focus() {
-	if f.kind == kindText || f.kind == kindPicker || f.kind == kindModelPicker {
+	if f.hasInput() {
 		f.input.Focus()
 	}
 }
 
 func (f *formField) blur() {
-	if f.kind == kindText || f.kind == kindPicker || f.kind == kindModelPicker {
+	if f.hasInput() {
 		f.input.Blur()
 	}
 }
@@ -242,6 +254,10 @@ func (fm *form) handleKey(msg tea.KeyMsg) (tea.Cmd, bool, bool) {
 	case "esc":
 		return nil, false, true
 	case "tab":
+		if field := fm.fields[fm.focus]; field.kind == kindPath && field.completePath() {
+			return nil, false, false
+		}
+
 		fm.nextField()
 
 		return nil, false, false
@@ -328,6 +344,44 @@ func (fm *form) handleKey(msg tea.KeyMsg) (tea.Cmd, bool, bool) {
 		field.refilterModelPicker()
 
 		return cmd, false, false
+	case kindPath:
+		switch msg.String() {
+		case "up":
+			if field.pickerCursor > 0 {
+				field.pickerCursor--
+			}
+
+			return nil, false, false
+		case "down":
+			if field.pickerCursor < len(field.pickerMatches)-1 {
+				field.pickerCursor++
+			}
+
+			return nil, false, false
+		case "enter":
+			if len(field.pickerMatches) > 0 {
+				field.applyPathChoice(field.pickerMatches[field.pickerCursor])
+			}
+
+			return nil, false, false
+		}
+
+		var cmd tea.Cmd
+		field.input, cmd = field.input.Update(msg)
+		field.refilterPath()
+
+		return cmd, false, false
+	case kindEditor:
+		if msg.String() == "enter" {
+			fm.errMsg = ""
+
+			cmd, err := field.openEditor()
+			if err != nil {
+				fm.errMsg = err.Error()
+			}
+
+			return cmd, false, false
+		}
 	case kindText:
 		var cmd tea.Cmd
 		field.input, cmd = field.input.Update(msg)
@@ -436,6 +490,27 @@ func (fm *form) view() string {
 			if focused {
 				b.WriteString(dimStyle.Render(" (type to filter, up/down move, enter select)"))
 				writePickerMatches(&b, f)
+			}
+		case kindPath:
+			b.WriteString(f.input.View())
+			switch pathKind(f.text()) {
+			case "file":
+				b.WriteString(okStyle.Render(" (file)"))
+			case "dir":
+				b.WriteString(dimStyle.Render(" (directory)"))
+			}
+			if focused {
+				b.WriteString(dimStyle.Render(" (tab complete, up/down move, enter select)"))
+				writePickerMatches(&b, f)
+			}
+		case kindEditor:
+			if f.editorChanged {
+				b.WriteString(okStyle.Render("edited - applied when you save"))
+			} else {
+				b.WriteString(dimStyle.Render("unchanged"))
+			}
+			if focused {
+				b.WriteString(dimStyle.Render(" (enter to edit in $EDITOR)"))
 			}
 		case kindModelPicker:
 			b.WriteString(f.input.View())

@@ -336,12 +336,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmd, submitted, cancelled := m.form.handleKey(msg)
 		if cancelled {
 			m.screen = m.prevScreen
+			m.form.close()
 			m.form = nil
 
 			return m, nil
 		}
 		if submitted {
 			m.screen = m.prevScreen
+			m.form.close()
 			m.form = nil
 			m.status = "saved"
 
@@ -438,6 +440,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		m.loading = false
 		m.err = msg.err
+
+		return m, nil
+	case editorDoneMsg:
+		if m.form != nil {
+			m.form.handleEditorDone(msg)
+		}
 
 		return m, nil
 	case tea.KeyMsg:
