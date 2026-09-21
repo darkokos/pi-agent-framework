@@ -130,25 +130,6 @@ func ModelsForID(entries []ModelEntry, id string) []ModelEntry {
 	return out
 }
 
-func ExtensionPath(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-
-	if !info.IsDir() {
-		return strings.HasSuffix(path, ".ts") || strings.HasSuffix(path, ".js")
-	}
-
-	for _, name := range []string{"index.ts", "index.js"} {
-		if _, err := os.Stat(filepath.Join(path, name)); err == nil {
-			return true
-		}
-	}
-
-	return packageDeclaresExtensions(path)
-}
-
 func packageDeclaresExtensions(dir string) bool {
 	data, err := os.ReadFile(filepath.Join(dir, "package.json"))
 	if err != nil {
@@ -165,6 +146,51 @@ func packageDeclaresExtensions(dir string) bool {
 	}
 
 	return len(pkg.Pi.Extensions) > 0
+}
+
+func packageHasExtensionsDir(dir string) bool {
+	entries, err := os.ReadDir(filepath.Join(dir, "extensions"))
+	if err != nil {
+		return false
+	}
+
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() {
+			for _, index := range []string{"index.ts", "index.js"} {
+				if _, err := os.Stat(filepath.Join(dir, "extensions", name, index)); err == nil {
+					return true
+				}
+			}
+
+			continue
+		}
+
+		if strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".js") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func ExtensionPath(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	if !info.IsDir() {
+		return strings.HasSuffix(path, ".ts") || strings.HasSuffix(path, ".js")
+	}
+
+	for _, name := range []string{"index.ts", "index.js"} {
+		if _, err := os.Stat(filepath.Join(path, name)); err == nil {
+			return true
+		}
+	}
+
+	return packageDeclaresExtensions(path) || packageHasExtensionsDir(path)
 }
 
 func SkillPath(path string) bool {
