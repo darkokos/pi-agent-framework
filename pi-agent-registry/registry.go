@@ -91,6 +91,7 @@ func CreateAgent(root, id, name, description string) (*Agent, error) {
 
 type AgentVersionInput struct {
 	SystemPromptFile string
+	SystemPromptMode string
 	Model            string
 	Provider         string
 	Thinking         string
@@ -116,6 +117,11 @@ func CreateAgentVersion(root, agentID, versionID string, in AgentVersionInput) (
 		return nil, fmt.Errorf("reading system prompt file: %w", err)
 	}
 
+	promptMode := in.SystemPromptMode
+	if promptMode == "" {
+		promptMode = "replace"
+	}
+
 	version := &AgentVersion{
 		AgentID:   agentID,
 		VersionID: versionID,
@@ -123,7 +129,7 @@ func CreateAgentVersion(root, agentID, versionID string, in AgentVersionInput) (
 		Provider:  in.Provider,
 		Thinking:  in.Thinking,
 		SystemPrompt: SystemPromptRef{
-			Mode: "replace",
+			Mode: promptMode,
 			File: versionID + ".system.md",
 		},
 		Tools:      in.Tools,

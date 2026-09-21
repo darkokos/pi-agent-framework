@@ -16,6 +16,8 @@ type ModelEntry struct {
 	Model    string
 }
 
+var SystemPromptModes = []string{"replace", "append"}
+
 var ThinkingLevels = []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 var ToolsModes = []string{"all", "none", "extensions-only", "allowlist", "denylist"}

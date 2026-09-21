@@ -12,12 +12,22 @@ import (
 	"github.com/darkokos/pi-agent-framework/pi-agent-validate"
 )
 
+const systemPromptModeHelp = "replace|append: whether the prompt replaces Pi's default system prompt or is added to it"
+
 func requireValidThinkingLevel(thinking string) error {
 	if thinking == "" || validate.ThinkingLevel(thinking) {
 		return nil
 	}
 
 	return fmt.Errorf("--thinking must be one of %s, got %q", strings.Join(validate.ThinkingLevels, "|"), thinking)
+}
+
+func requireValidSystemPromptMode(mode string) error {
+	if slices.Contains(validate.SystemPromptModes, mode) {
+		return nil
+	}
+
+	return fmt.Errorf("--system-prompt-mode must be one of %s, got %q", strings.Join(validate.SystemPromptModes, "|"), mode)
 }
 
 func requireValidPaths(flag string, paths []string, valid func(string) bool) error {
@@ -45,6 +55,7 @@ func newCreateAgentCommand() *cobra.Command {
 		description       string
 		versionID         string
 		systemPromptFile  string
+		systemPromptMode  string
 		model             string
 		thinking          string
 		notes             string
@@ -61,6 +72,9 @@ func newCreateAgentCommand() *cobra.Command {
 		Short: "Register a new agent, along with its first version",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireValidSystemPromptMode(systemPromptMode); err != nil {
+				return err
+			}
 			if !slices.Contains(validate.ToolsModes, toolsMode) {
 				return fmt.Errorf("--tools-mode must be one of %s, got %q", strings.Join(validate.ToolsModes, "|"), toolsMode)
 			}
@@ -90,6 +104,7 @@ func newCreateAgentCommand() *cobra.Command {
 
 			version, err := registry.CreateAgentVersion(root, agent.ID, versionID, registry.AgentVersionInput{
 				SystemPromptFile: systemPromptFile,
+				SystemPromptMode: systemPromptMode,
 				Model:            resolvedModel,
 				Provider:         resolvedProvider,
 				Thinking:         thinking,
@@ -122,8 +137,8 @@ func newCreateAgentCommand() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "human-readable agent name")
 	cmd.Flags().StringVar(&description, "description", "", "what this agent is for")
 	cmd.Flags().StringVar(&versionID, "initial-version-id", "", "id for the agent's first version (required)")
-	_ = cmd.MarkFlagRequired("initial-version-id")
 	cmd.Flags().StringVar(&systemPromptFile, "system-prompt-file", "", "path to the system prompt text (required)")
+	cmd.Flags().StringVar(&systemPromptMode, "system-prompt-mode", "replace", systemPromptModeHelp)
 	cmd.Flags().StringVar(&model, "model", "", "model id, or provider/model when the model is offered by more than one provider (required)")
 	cmd.Flags().StringVar(&thinking, "thinking", "", "thinking level: off|minimal|low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
@@ -133,10 +148,12 @@ func newCreateAgentCommand() *cobra.Command {
 	cmd.Flags().StringArrayVar(&extensionPaths, "extension", nil, "extension path to always load, repeatable")
 	cmd.Flags().BoolVar(&skillsIsolate, "skills-isolate", false, "disable automatically-discovered skills; skills given via --skill always load either way")
 	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "skill path to always load, repeatable")
+	_ = cmd.MarkFlagRequired("initial-version-id")
 	_ = cmd.MarkFlagRequired("system-prompt-file")
 	_ = cmd.MarkFlagRequired("model")
 
 	_ = cmd.RegisterFlagCompletionFunc("system-prompt-file", completeFilePaths)
+	_ = cmd.RegisterFlagCompletionFunc("system-prompt-mode", completeSystemPromptModes)
 	_ = cmd.RegisterFlagCompletionFunc("model", completeModels)
 	_ = cmd.RegisterFlagCompletionFunc("thinking", completeThinkingLevels)
 	_ = cmd.RegisterFlagCompletionFunc("tools-mode", completeToolsModes)
@@ -150,6 +167,7 @@ func newCreateAgentCommand() *cobra.Command {
 func newCreateAgentVersionCommand() *cobra.Command {
 	var (
 		systemPromptFile  string
+		systemPromptMode  string
 		model             string
 		thinking          string
 		notes             string
@@ -169,6 +187,9 @@ func newCreateAgentVersionCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			agentID, versionID, err := parseAgentVersionRef(args[0])
 			if err != nil {
+				return err
+			}
+			if err := requireValidSystemPromptMode(systemPromptMode); err != nil {
 				return err
 			}
 			if !slices.Contains(validate.ToolsModes, toolsMode) {
@@ -195,6 +216,7 @@ func newCreateAgentVersionCommand() *cobra.Command {
 
 			version, err := registry.CreateAgentVersion(root, agentID, versionID, registry.AgentVersionInput{
 				SystemPromptFile: systemPromptFile,
+				SystemPromptMode: systemPromptMode,
 				Model:            resolvedModel,
 				Provider:         resolvedProvider,
 				Thinking:         thinking,
@@ -223,6 +245,7 @@ func newCreateAgentVersionCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&systemPromptFile, "system-prompt-file", "", "path to the system prompt text (required)")
+	cmd.Flags().StringVar(&systemPromptMode, "system-prompt-mode", "replace", systemPromptModeHelp)
 	cmd.Flags().StringVar(&model, "model", "", "model id, or provider/model when the model is offered by more than one provider (required)")
 	cmd.Flags().StringVar(&thinking, "thinking", "", "thinking level: off|minimal|low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
@@ -236,6 +259,7 @@ func newCreateAgentVersionCommand() *cobra.Command {
 	_ = cmd.MarkFlagRequired("model")
 
 	_ = cmd.RegisterFlagCompletionFunc("system-prompt-file", completeFilePaths)
+	_ = cmd.RegisterFlagCompletionFunc("system-prompt-mode", completeSystemPromptModes)
 	_ = cmd.RegisterFlagCompletionFunc("model", completeModels)
 	_ = cmd.RegisterFlagCompletionFunc("thinking", completeThinkingLevels)
 	_ = cmd.RegisterFlagCompletionFunc("tools-mode", completeToolsModes)
@@ -426,6 +450,7 @@ func newUpdateAgentCommand() *cobra.Command {
 func newUpdateAgentVersionCommand() *cobra.Command {
 	var (
 		systemPromptFile  string
+		systemPromptMode  string
 		model             string
 		thinking          string
 		notes             string
@@ -459,6 +484,14 @@ func newUpdateAgentVersionCommand() *cobra.Command {
 			}
 
 			flags := cmd.Flags()
+
+			if flags.Changed("system-prompt-mode") {
+				if err := requireValidSystemPromptMode(systemPromptMode); err != nil {
+					return err
+				}
+
+				version.SystemPrompt.Mode = systemPromptMode
+			}
 
 			if flags.Changed("model") {
 				resolvedModel, resolvedProvider, err := validate.ParseModel(model)
@@ -527,6 +560,7 @@ func newUpdateAgentVersionCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&systemPromptFile, "system-prompt-file", "", "path to the system prompt text")
+	cmd.Flags().StringVar(&systemPromptMode, "system-prompt-mode", "", systemPromptModeHelp)
 	cmd.Flags().StringVar(&model, "model", "", "model id, or provider/model when the model is offered by more than one provider")
 	cmd.Flags().StringVar(&thinking, "thinking", "", "thinking level: off|minimal|low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
@@ -538,6 +572,7 @@ func newUpdateAgentVersionCommand() *cobra.Command {
 	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "skill path to always load, repeatable")
 
 	_ = cmd.RegisterFlagCompletionFunc("system-prompt-file", completeFilePaths)
+	_ = cmd.RegisterFlagCompletionFunc("system-prompt-mode", completeSystemPromptModes)
 	_ = cmd.RegisterFlagCompletionFunc("model", completeModels)
 	_ = cmd.RegisterFlagCompletionFunc("thinking", completeThinkingLevels)
 	_ = cmd.RegisterFlagCompletionFunc("tools-mode", completeToolsModes)

@@ -20,6 +20,13 @@ func completeToolsModes(_ *cobra.Command, _ []string, _ string) ([]string, cobra
 	return validate.ToolsModes, cobra.ShellCompDirectiveNoFileComp
 }
 
+func completeSystemPromptModes(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return []string{
+		"replace\treplace Pi's default system prompt",
+		"append\tadd to Pi's default system prompt",
+	}, cobra.ShellCompDirectiveNoFileComp
+}
+
 func completeToolsList(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if mode, _ := cmd.Flags().GetString("tools-mode"); mode != "allowlist" && mode != "denylist" {
 		return cobra.AppendActiveHelp(nil, "requires --tools-mode allowlist or denylist"), cobra.ShellCompDirectiveNoFileComp

@@ -201,11 +201,13 @@ var thinkingOptions = append([]string{""}, validate.ThinkingLevels...)
 func versionSettingsFields(v *registry.AgentVersion) []*formField {
 	model, provider, thinking, notes := "", "", "", ""
 	toolsMode := validate.ToolsModes[0]
+	promptMode := validate.SystemPromptModes[0]
 	var toolNames, extPaths, skillPaths []string
 	extIsolate, skillIsolate := false, false
 
 	if v != nil {
 		model, provider, thinking, notes = v.Model, v.Provider, v.Thinking, v.Notes
+		promptMode = v.SystemPrompt.Mode
 		toolsMode = v.Tools.Mode
 		toolNames = v.Tools.Names
 		extIsolate, extPaths = v.Extensions.Isolate, v.Extensions.Paths
@@ -222,6 +224,7 @@ func versionSettingsFields(v *registry.AgentVersion) []*formField {
 	}
 
 	return []*formField{
+		newEnumField("System Prompt Mode", "replace: the prompt takes the place of Pi's default system prompt; append: it is added after Pi's default one", validate.SystemPromptModes, promptMode),
 		newModelPickerField("Model", "provider is set automatically from the chosen model", discoverModelEntries(), model, provider),
 		newEnumField("Thinking", "", thinkingOptions, thinking),
 		toolsModeField,
@@ -235,41 +238,44 @@ func versionSettingsFields(v *registry.AgentVersion) []*formField {
 }
 
 func buildVersionInput(f *form) (registry.AgentVersionInput, error) {
-	modelField := f.fields[0]
+	promptMode := f.fields[0].options[f.fields[0].enumIdx]
+
+	modelField := f.fields[1]
 	if modelField.resolvedModel == "" {
 		return registry.AgentVersionInput{}, fmt.Errorf("Model: select an entry from the list (type to search, enter to confirm)")
 	}
 
-	thinking := f.fields[1].options[f.fields[1].enumIdx]
+	thinking := f.fields[2].options[f.fields[2].enumIdx]
 	if thinking != "" && !validate.ThinkingLevel(thinking) {
 		return registry.AgentVersionInput{}, fmt.Errorf("invalid thinking level %q", thinking)
 	}
 
-	extPaths := splitCommaList(f.fields[5].text())
+	extPaths := splitCommaList(f.fields[6].text())
 	if err := validatePaths(extPaths, validate.ExtensionPath, "extension path"); err != nil {
 		return registry.AgentVersionInput{}, err
 	}
 
-	skillPaths := splitCommaList(f.fields[7].text())
+	skillPaths := splitCommaList(f.fields[8].text())
 	if err := validatePaths(skillPaths, validate.SkillPath, "skill path"); err != nil {
 		return registry.AgentVersionInput{}, err
 	}
 
 	return registry.AgentVersionInput{
-		Model:    modelField.resolvedModel,
-		Provider: modelField.resolvedProvider,
-		Thinking: thinking,
-		Notes:    f.fields[8].text(),
+		SystemPromptMode: promptMode,
+		Model:            modelField.resolvedModel,
+		Provider:         modelField.resolvedProvider,
+		Thinking:         thinking,
+		Notes:            f.fields[9].text(),
 		Tools: registry.ToolsConfig{
-			Mode:  f.fields[2].options[f.fields[2].enumIdx],
-			Names: splitCommaList(f.fields[3].text()),
+			Mode:  f.fields[3].options[f.fields[3].enumIdx],
+			Names: splitCommaList(f.fields[4].text()),
 		},
 		Extensions: registry.ResourceIsolation{
-			Isolate: f.fields[4].boolVal,
+			Isolate: f.fields[5].boolVal,
 			Paths:   extPaths,
 		},
 		Skills: registry.ResourceIsolation{
-			Isolate: f.fields[6].boolVal,
+			Isolate: f.fields[7].boolVal,
 			Paths:   skillPaths,
 		},
 	}, nil
@@ -315,6 +321,7 @@ func newVersionUpdateForm(root, agentID string, v *registry.AgentVersion) *form 
 			return err
 		}
 
+		v.SystemPrompt.Mode = in.SystemPromptMode
 		v.Model, v.Provider, v.Thinking, v.Notes = in.Model, in.Provider, in.Thinking, in.Notes
 		v.Tools, v.Extensions, v.Skills = in.Tools, in.Extensions, in.Skills
 
