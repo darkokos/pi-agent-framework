@@ -205,6 +205,10 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenTaskDetail
 		}
 	case "n":
+		if m.root == "" {
+			return m, nil
+		}
+
 		m.prevScreen = screenList
 		if m.top == topAgents {
 			m.form = newAgentCreateForm(m.root)
@@ -247,6 +251,10 @@ func (m Model) handleAgentDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenVersionDetail
 		}
 	case "n":
+		if m.root == "" {
+			return m, nil
+		}
+
 		m.prevScreen = screenAgentDetail
 		m.form = newVersionCreateForm(m.root, m.selectedAgent.ID)
 		m.screen = screenForm
@@ -619,12 +627,18 @@ func (m Model) View() string {
 	b.WriteString("\n\n")
 
 	if m.err != nil {
-		b.WriteString(errStyle.Render(fmt.Sprintf("error: %v", m.err)))
+		b.WriteString(errStyle.Width(m.width).Render(fmt.Sprintf("error: %v", m.err)))
 		b.WriteString("\n\n")
 	}
 	if m.status != "" {
 		b.WriteString(okStyle.Render(m.status))
 		b.WriteString("\n\n")
+	}
+
+	if m.root == "" && m.err != nil {
+		b.WriteString(helpStyle.Render("q quit"))
+
+		return b.String()
 	}
 
 	if m.screen == screenRun {

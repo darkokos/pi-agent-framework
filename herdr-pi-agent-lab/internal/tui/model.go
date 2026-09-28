@@ -389,7 +389,7 @@ func (m Model) View() string {
 	b.WriteString("\n\n")
 
 	if m.err != nil {
-		b.WriteString(errStyle.Render(fmt.Sprintf("error: %v", m.err)))
+		b.WriteString(errStyle.Width(m.width).Render(fmt.Sprintf("error: %v", m.err)))
 		b.WriteString("\n\n")
 	}
 
@@ -411,6 +411,12 @@ func (m Model) View() string {
 	if m.status != "" {
 		b.WriteString(okStyle.Render(m.status))
 		b.WriteString("\n\n")
+	}
+
+	if m.resolvedRoot == "" && m.err != nil && m.overrideRoot == nil {
+		b.WriteString(helpStyle.Render("o use a registry for this session  q quit"))
+
+		return b.String()
 	}
 
 	if m.loading && len(m.rows) == 0 {

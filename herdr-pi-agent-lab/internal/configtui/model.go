@@ -1,6 +1,7 @@
 package configtui
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -14,11 +15,12 @@ import (
 )
 
 var (
-	headerStyle = lipgloss.NewStyle().Bold(true)
-	dimStyle    = theme.Dim
-	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	okStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	helpStyle   = theme.Help
+	headerStyle    = lipgloss.NewStyle().Bold(true)
+	dimStyle       = theme.Dim
+	errStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	okStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	helpStyle      = theme.Help
+	attentionStyle = theme.Attention
 )
 
 type screen int
@@ -29,12 +31,13 @@ const (
 )
 
 type Model struct {
-	screen  screen
-	root    string
-	input   textinput.Model
-	err     error
-	status  string
-	loading bool
+	screen    screen
+	root      string
+	suggested string
+	input     textinput.Model
+	err       error
+	status    string
+	loading   bool
 }
 
 type dataMsg struct{ root string }
@@ -72,13 +75,32 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c", "q":
 		return m, tea.Quit
 	case "e":
-		m.input.SetValue(m.root)
+		start := m.root
+		if start == "" {
+			start = m.suggested
+		}
+
+		m.input.SetValue(start)
 		m.input.CursorEnd()
 		m.status = ""
 		m.err = nil
 		m.screen = screenEdit
 
 		return m, m.input.Focus()
+	case "d":
+		dir, err := registry.SuggestedRegistryDir()
+		if err == nil {
+			err = registry.SetRegistryDir(dir)
+		}
+		if err != nil {
+			m.err = err
+
+			return m, nil
+		}
+
+		m.root = dir
+		m.status = "registry set to the default location"
+		m.err = nil
 	}
 
 	return m, nil
@@ -93,6 +115,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case errMsg:
 		m.loading = false
+
+		if unset, ok := errors.AsType[*registry.NoRegistryError](msg.err); ok {
+			m.suggested = unset.Suggested
+
+			return m, nil
+		}
+
 		m.err = msg.err
 
 		return m, nil
@@ -177,10 +206,25 @@ func (m Model) View() string {
 		return b.String()
 	}
 
+	if m.root == "" {
+		b.WriteString(attentionStyle.Render("No registry directory is set."))
+		b.WriteString("\n\nChoose where your agents and tasks are stored. Nothing works until you do.\n")
+		if m.suggested != "" {
+			b.WriteString("\nSuggested location:\n")
+			b.WriteString(m.suggested)
+			b.WriteString("\n")
+		}
+
+		b.WriteString("\n")
+		b.WriteString(helpStyle.Render("e choose a directory  d use the suggested location  q quit"))
+
+		return b.String()
+	}
+
 	b.WriteString("Registry Directory:\n")
 	b.WriteString(m.root)
 	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Render("e edit  q quit"))
+	b.WriteString(helpStyle.Render("e edit  d use the default location  q quit"))
 
 	return b.String()
 }

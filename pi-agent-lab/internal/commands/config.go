@@ -16,15 +16,38 @@ func NewConfigCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(newConfigUpdateCommand())
+	cmd.AddCommand(newConfigDefaultCommand())
 	cmd.AddCommand(newConfigShowCommand())
 
 	return cmd
 }
 
+func newConfigDefaultCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "default",
+		Short: "Set the registry to the suggested default location",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			suggested, err := registry.SuggestedRegistryDir()
+			if err != nil {
+				return err
+			}
+
+			if err := registry.SetRegistryDir(suggested); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "registry directory set to %s\n", suggested)
+
+			return nil
+		},
+	}
+}
+
 func newConfigUpdateCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update <path>",
-		Short: "Update where the agent/task registry lives",
+		Short: "Set where the agent/task registry lives",
 		Args:  cobra.ExactArgs(1),
 		ValidArgsFunction: func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 			return nil, cobra.ShellCompDirectiveFilterDirs

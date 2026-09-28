@@ -347,12 +347,18 @@ func (m Model) View() string {
 	}
 
 	if m.err != nil {
-		b.WriteString(errStyle.Render(fmt.Sprintf("error: %v", m.err)))
+		b.WriteString(errStyle.Width(m.width).Render(fmt.Sprintf("error: %v", m.err)))
 		b.WriteString("\n\n")
 	}
 	if m.status != "" {
 		b.WriteString(okStyle.Render(m.status))
 		b.WriteString("\n\n")
+	}
+
+	if m.root == "" && m.err != nil {
+		b.WriteString(helpStyle.Render("q quit"))
+
+		return b.String()
 	}
 
 	if m.loading && len(m.agents) == 0 {

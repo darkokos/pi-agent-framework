@@ -46,6 +46,19 @@ func readConfig() (*config, error) {
 	return &cfg, nil
 }
 
+type NoRegistryError struct {
+	Suggested string
+}
+
+func (e *NoRegistryError) Error() string {
+	if e.Suggested == "" {
+		return "no registry directory is set: choose one with `pi-agent-lab config update <dir>` or in the Config pane"
+	}
+
+	return "no registry directory is set: run `pi-agent-lab config default` to use the suggested location (" +
+		e.Suggested + "), `pi-agent-lab config update <dir>` to choose another, or use the Config pane"
+}
+
 func ResolveRoot() (string, error) {
 	cfg, err := readConfig()
 	if err != nil {
@@ -55,10 +68,12 @@ func ResolveRoot() (string, error) {
 		return cfg.RegistryDir, nil
 	}
 
-	return defaultRegistryDir()
+	suggested, _ := SuggestedRegistryDir()
+
+	return "", &NoRegistryError{Suggested: suggested}
 }
 
-func defaultRegistryDir() (string, error) {
+func SuggestedRegistryDir() (string, error) {
 	dir := os.Getenv("XDG_DATA_HOME")
 	if dir == "" {
 		home, err := os.UserHomeDir()
