@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/execconfirm"
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 	invoke "github.com/darkokos/pi-agent-framework/pi-agent-invoke"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
@@ -22,7 +23,7 @@ const (
 
 var (
 	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	dimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	dimStyle      = theme.Dim
 	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 )
 

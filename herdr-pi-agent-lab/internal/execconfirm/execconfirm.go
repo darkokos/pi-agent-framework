@@ -6,6 +6,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 )
 
 type Action int
@@ -18,7 +20,7 @@ const (
 
 const reservedLines = 7
 
-var helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+var helpStyle = theme.Help
 
 type Model struct {
 	line string

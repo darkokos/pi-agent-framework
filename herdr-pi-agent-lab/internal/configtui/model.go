@@ -9,15 +9,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
 var (
 	headerStyle = lipgloss.NewStyle().Bold(true)
-	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	dimStyle    = theme.Dim
 	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	okStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	helpStyle   = dimStyle
+	helpStyle   = theme.Help
 )
 
 type screen int

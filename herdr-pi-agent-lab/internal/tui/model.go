@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/execconfirm"
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 	"github.com/darkokos/pi-agent-framework/pi-agent-compare"
 	invoke "github.com/darkokos/pi-agent-framework/pi-agent-invoke"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
@@ -272,12 +273,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 var (
-	headerStyle   = lipgloss.NewStyle().Bold(true)
-	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	dimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	helpStyle     = dimStyle
-	okStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	headerStyle    = lipgloss.NewStyle().Bold(true)
+	selectedStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	dimStyle       = theme.Dim
+	errStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	helpStyle      = theme.Help
+	okStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	resultStyle    = theme.Result
+	attentionStyle = theme.Attention
 )
 
 func summarize(g *compare.TaskGroup) string {
@@ -285,7 +288,7 @@ func summarize(g *compare.TaskGroup) string {
 		return dimStyle.Render("no runs yet")
 	}
 
-	return dimStyle.Render(fmt.Sprintf("%d rated, %d unrated", len(g.Rated), len(g.Unrated)))
+	return resultStyle.Render(fmt.Sprintf("%d rated, %d unrated", len(g.Rated), len(g.Unrated)))
 }
 
 func (m Model) viewList(b *strings.Builder) {
@@ -346,7 +349,7 @@ func (m Model) viewDetail(b *strings.Builder) {
 
 	for i, r := range row.group.Rated {
 		fmt.Fprintf(b, "%d. %s  %s\n", i+1, r.SessionId, strOrDash(r.AgentVersion))
-		b.WriteString(dimStyle.Render(fmt.Sprintf("   outcome=%s rework=%s autonomy=%s  cost=$%.4f tokens=%.0f toolErrors=%d duration=%s",
+		b.WriteString(resultStyle.Render(fmt.Sprintf("   outcome=%s rework=%s autonomy=%s  cost=$%.4f tokens=%.0f toolErrors=%d duration=%s",
 			intOrDash(r.Outcome.Outcome), intOrDash(r.Outcome.Rework), intOrDash(r.Outcome.Autonomy),
 			r.Usage.CostUsd, compare.TotalTokens(r), r.Activity.ToolErrors, durationOrDash(r.DurationMs))))
 		b.WriteString("\n")
@@ -354,14 +357,15 @@ func (m Model) viewDetail(b *strings.Builder) {
 
 	if len(row.group.Unrated) > 0 {
 		b.WriteString("\n")
-		b.WriteString(dimStyle.Render("needs rating:"))
+		b.WriteString(attentionStyle.Render("needs rating:"))
 		b.WriteString("\n")
 		for i, r := range row.group.Unrated {
 			line := fmt.Sprintf("%s  %s", r.SessionId, strOrDash(r.AgentVersion))
 			if i == m.runCursor {
 				b.WriteString(selectedStyle.Render("> " + line))
 			} else {
-				b.WriteString(dimStyle.Render("  " + line))
+				b.WriteString("  ")
+				b.WriteString(line)
 			}
 
 			b.WriteString("\n")

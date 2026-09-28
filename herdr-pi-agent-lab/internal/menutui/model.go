@@ -6,15 +6,16 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 )
 
 var (
 	headerStyle   = lipgloss.NewStyle().Bold(true)
 	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	dimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	okStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	helpStyle     = dimStyle
+	helpStyle     = theme.Help
 )
 
 type item struct {
