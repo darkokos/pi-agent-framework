@@ -19,8 +19,9 @@ var (
 )
 
 type item struct {
-	label      string
-	entrypoint string
+	label       string
+	description string
+	entrypoint  string
 }
 
 type Model struct {
@@ -35,10 +36,10 @@ type openResultMsg struct {
 }
 
 var items = []item{
-	{"Run", "run"},
-	{"Registry", "registry"},
-	{"Results", "compare"},
-	{"Config", "config"},
+	{"Start a run", "Pick an agent version and a task, then run it", "run"},
+	{"Agents & Tasks", "Create and delete your agents, their versions, and tasks", "registry"},
+	{"Review Runs", "See how each agent version did on a task, and rate unrated runs", "compare"},
+	{"Config", "Choose where your agents and tasks are stored", "config"},
 }
 
 func NewModel() Model { return Model{} }
@@ -110,7 +111,9 @@ func (m Model) View() string {
 			b.WriteString(it.label)
 		}
 
-		b.WriteString("\n")
+		b.WriteString("\n    ")
+		b.WriteString(theme.Dim.Render(it.description))
+		b.WriteString("\n\n")
 	}
 
 	b.WriteString("\n")

@@ -17,19 +17,19 @@ command = ["./bin/pi-agent-lab-menu-pane"]
 
 [[panes]]
 id = "compare"
-title = "Pi Agent Lab — Results"
+title = "Pi Agent Lab — Review Runs"
 placement = "tab"
 command = ["./bin/pi-agent-lab-pane"]
 
 [[panes]]
 id = "run"
-title = "Pi Agent Lab — Run"
+title = "Pi Agent Lab — Start a run"
 placement = "tab"
 command = ["./bin/pi-agent-lab-run-pane"]
 
 [[panes]]
 id = "registry"
-title = "Pi Agent Lab — Registry"
+title = "Pi Agent Lab — Agents & Tasks"
 placement = "tab"
 command = ["./bin/pi-agent-lab-registry-pane"]
 

@@ -631,7 +631,7 @@ func (m Model) viewList(b *strings.Builder) {
 func (m Model) View() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Pi Agent Lab — Registry"))
+	b.WriteString(headerStyle.Render("Pi Agent Lab — Agents & Tasks"))
 	if m.root != "" {
 		b.WriteString(dimStyle.Render(" - " + m.root))
 	}

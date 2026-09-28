@@ -301,7 +301,7 @@ func writeRow(b *strings.Builder, line string, selected bool) {
 
 func (m Model) viewAgent(b *strings.Builder) {
 	if len(m.agents) == 0 {
-		b.WriteString(dimStyle.Render("no agents registered yet — add one from the Registry pane"))
+		b.WriteString(dimStyle.Render("no agents registered yet — add one from Agents & Tasks"))
 		b.WriteString("\n")
 
 		return
@@ -333,7 +333,7 @@ func (m Model) helpText() string {
 func (m Model) View() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Pi Agent Lab — Run"))
+	b.WriteString(headerStyle.Render("Pi Agent Lab — Start a run"))
 	if m.root != "" {
 		b.WriteString(dimStyle.Render(" - " + m.root))
 	}

@@ -376,7 +376,7 @@ func (m Model) viewDetail(b *strings.Builder) {
 func (m Model) View() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Pi Agent Lab"))
+	b.WriteString(headerStyle.Render("Pi Agent Lab — Review Runs"))
 	if m.resolvedRoot != "" {
 		suffix := ""
 		if m.overrideRoot != nil {
