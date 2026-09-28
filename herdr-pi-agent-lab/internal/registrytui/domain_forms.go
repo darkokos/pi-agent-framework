@@ -100,7 +100,7 @@ func newAgentCreateForm(root string) *form {
 		newTextField("Description", "", "what this agent is for", ""),
 		newTextField("Initial Version ID", "unique within this agent, immutable", "e.g. 1.0.0", ""),
 		newPathField("System Prompt File", "required; paths start from your home directory", "~/system-prompt.md", "~/"),
-	}, versionSettingsFields(nil)...)
+	}, versionSettingsFields()...)
 
 	return newForm("Create Agent", fields, func(f *form) error {
 		id := f.fields[0].text()
@@ -137,22 +137,6 @@ func newAgentCreateForm(root string) *form {
 	})
 }
 
-func newAgentUpdateForm(root string, agent *registry.Agent) *form {
-	fields := []*formField{
-		newTextField("Name", "", "", agent.Name),
-		newTextField("Description", "", "", agent.Description),
-	}
-
-	return newForm("Update Agent "+agent.ID, fields, func(f *form) error {
-		agent.Name = f.fields[0].text()
-		agent.Description = f.fields[1].text()
-
-		_, err := registry.ReplaceAgent(root, agent)
-
-		return err
-	})
-}
-
 func newTaskCreateForm(root string) *form {
 	fields := []*formField{
 		newTextField("ID", "unique, immutable", "e.g. refactor-auth", ""),
@@ -177,46 +161,12 @@ func newTaskCreateForm(root string) *form {
 	})
 }
 
-func newTaskUpdateForm(root string, task *registry.Task) *form {
-	fields := []*formField{
-		newEditorField("Prompt", "edit the stored task prompt in your editor", func() (string, error) {
-			data, err := os.ReadFile(registry.TaskPromptPath(root, task.ID))
-
-			return string(data), err
-		}),
-		newTextField("Notes", "", "", task.Notes),
-	}
-
-	return newForm("Update Task "+task.ID, fields, func(f *form) error {
-		task.Notes = f.fields[1].text()
-
-		_, err := registry.ReplaceTask(root, task, f.fields[0].editedSource())
-
-		return err
-	})
-}
-
 var thinkingOptions = append([]string{""}, validate.ThinkingLevels...)
 
-func versionSettingsFields(v *registry.AgentVersion) []*formField {
-	model, provider, thinking, notes := "", "", "", ""
-	toolsMode := validate.ToolsModes[0]
-	promptMode := validate.SystemPromptModes[0]
-	var toolNames, extPaths, skillPaths []string
-	extIsolate, skillIsolate := false, false
+func versionSettingsFields() []*formField {
+	toolsModeField := newEnumField("Tools Mode", "", validate.ToolsModes, validate.ToolsModes[0])
 
-	if v != nil {
-		model, provider, thinking, notes = v.Model, v.Provider, v.Thinking, v.Notes
-		promptMode = v.SystemPrompt.Mode
-		toolsMode = v.Tools.Mode
-		toolNames = v.Tools.Names
-		extIsolate, extPaths = v.Extensions.Isolate, v.Extensions.Paths
-		skillIsolate, skillPaths = v.Skills.Isolate, v.Skills.Paths
-	}
-
-	toolsModeField := newEnumField("Tools Mode", "", validate.ToolsModes, toolsMode)
-
-	toolNamesField := newPickerField("Tool Names", "comma-separated; not limited to the suggestions", "read,grep,find,ls", validate.BuiltinTools, strings.Join(toolNames, ","), true)
+	toolNamesField := newPickerField("Tool Names", "comma-separated; not limited to the suggestions", "read,grep,find,ls", validate.BuiltinTools, "", true)
 	toolNamesField.visible = func() bool {
 		mode := toolsModeField.options[toolsModeField.enumIdx]
 
@@ -224,16 +174,16 @@ func versionSettingsFields(v *registry.AgentVersion) []*formField {
 	}
 
 	return []*formField{
-		newEnumField("System Prompt Mode", "replace: the prompt takes the place of Pi's default system prompt; append: it is added after Pi's default one", validate.SystemPromptModes, promptMode),
-		newModelPickerField("Model", "provider is set automatically from the chosen model", discoverModelEntries(), model, provider),
-		newEnumField("Thinking", "", thinkingOptions, thinking),
+		newEnumField("System Prompt Mode", "replace: the prompt takes the place of Pi's default system prompt; append: it is added after Pi's default one", validate.SystemPromptModes, validate.SystemPromptModes[0]),
+		newModelPickerField("Model", "provider is set automatically from the chosen model", discoverModelEntries(), "", ""),
+		newEnumField("Thinking", "", thinkingOptions, ""),
 		toolsModeField,
 		toolNamesField,
-		newBoolField("Extensions Isolate", "disable automatically-discovered extensions; paths below always load either way", extIsolate),
-		newPickerField("Extension Paths", "comma-separated, always loaded regardless of isolate; not limited to the suggestions", "/path/to/extension.ts", discoverExtensionPaths(), strings.Join(extPaths, ","), true),
-		newBoolField("Skills Isolate", "disable automatically-discovered skills; paths below always load either way", skillIsolate),
-		newPickerField("Skill Paths", "comma-separated, always loaded regardless of isolate; not limited to the suggestions", "/path/to/skill", discoverSkillPaths(), strings.Join(skillPaths, ","), true),
-		newTextField("Notes", "", "", notes),
+		newBoolField("Extensions Isolate", "disable automatically-discovered extensions; paths below always load either way", false),
+		newPickerField("Extension Paths", "comma-separated, always loaded regardless of isolate; not limited to the suggestions", "/path/to/extension.ts", discoverExtensionPaths(), "", true),
+		newBoolField("Skills Isolate", "disable automatically-discovered skills; paths below always load either way", false),
+		newPickerField("Skill Paths", "comma-separated, always loaded regardless of isolate; not limited to the suggestions", "/path/to/skill", discoverSkillPaths(), "", true),
+		newTextField("Notes", "", "", ""),
 	}
 }
 
@@ -285,7 +235,7 @@ func newVersionCreateForm(root, agentID string) *form {
 	fields := append([]*formField{
 		newTextField("Version ID", "unique within this agent, immutable", "e.g. 1.0.1", ""),
 		newPathField("System Prompt File", "required; paths start from your home directory", "~/system-prompt.md", "~/"),
-	}, versionSettingsFields(nil)...)
+	}, versionSettingsFields()...)
 
 	return newForm("Create Version for "+agentID, fields, func(f *form) error {
 		versionID := f.fields[0].text()
@@ -303,29 +253,6 @@ func newVersionCreateForm(root, agentID string) *form {
 		}
 
 		_, err = registry.CreateAgentVersion(root, agentID, versionID, in)
-
-		return err
-	})
-}
-
-func newVersionUpdateForm(root, agentID string, v *registry.AgentVersion) *form {
-	fields := append([]*formField{
-		newEditorField("System Prompt", "edit the stored system prompt in your editor", func() (string, error) {
-			return registry.ReadVersionSystemPrompt(root, agentID, v.VersionID)
-		}),
-	}, versionSettingsFields(v)...)
-
-	return newForm(fmt.Sprintf("Update Version %s@%s", agentID, v.VersionID), fields, func(f *form) error {
-		in, err := buildVersionInput(&form{fields: f.fields[1:]})
-		if err != nil {
-			return err
-		}
-
-		v.SystemPrompt.Mode = in.SystemPromptMode
-		v.Model, v.Provider, v.Thinking, v.Notes = in.Model, in.Provider, in.Thinking, in.Notes
-		v.Tools, v.Extensions, v.Skills = in.Tools, in.Extensions, in.Skills
-
-		_, err = registry.ReplaceAgentVersion(root, agentID, v.VersionID, v, f.fields[0].editedSource())
 
 		return err
 	})

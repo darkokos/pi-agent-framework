@@ -3,18 +3,11 @@ package registrytui
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
 )
-
-type editorDoneMsg struct {
-	field *formField
-	err   error
-}
 
 func splitPath(text string) (dir, base string) {
 	i := strings.LastIndex(text, "/")
@@ -191,96 +184,4 @@ func requireFile(f *formField) (string, error) {
 	}
 
 	return path, nil
-}
-
-func newEditorField(label, help string, load func() (string, error)) *formField {
-	return &formField{label: label, help: help, kind: kindEditor, editorLoad: load}
-}
-
-func editorCommand(path string) *exec.Cmd {
-	editor := os.Getenv("VISUAL")
-	if editor == "" {
-		editor = os.Getenv("EDITOR")
-	}
-	if editor == "" {
-		editor = "vi"
-	}
-
-	return exec.Command("sh", "-c", editor+` "$@"`, "sh", path)
-}
-
-func (f *formField) openEditor() (tea.Cmd, error) {
-	if f.editorTemp == "" {
-		content, err := f.editorLoad()
-		if err != nil {
-			return nil, err
-		}
-
-		tmp, err := os.CreateTemp("", "pi-agent-lab-*.md")
-		if err != nil {
-			return nil, err
-		}
-
-		_, writeErr := tmp.WriteString(content)
-		if closeErr := tmp.Close(); writeErr == nil {
-			writeErr = closeErr
-		}
-		if writeErr != nil {
-			_ = os.Remove(tmp.Name())
-
-			return nil, writeErr
-		}
-
-		f.editorOriginal, f.editorAccepted, f.editorTemp = content, content, tmp.Name()
-	}
-
-	return tea.ExecProcess(editorCommand(f.editorTemp), func(err error) tea.Msg {
-		return editorDoneMsg{field: f, err: err}
-	}), nil
-}
-
-func trimEOL(s string) string { return strings.TrimRight(s, "\n") }
-
-func (fm *form) handleEditorDone(msg editorDoneMsg) {
-	f := msg.field
-	if msg.err != nil {
-		fm.errMsg = "editor: " + msg.err.Error()
-
-		return
-	}
-
-	data, err := os.ReadFile(f.editorTemp)
-	if err != nil {
-		fm.errMsg = err.Error()
-
-		return
-	}
-
-	content := string(data)
-	if strings.TrimSpace(content) == "" {
-		fm.errMsg = "the prompt cannot be empty - that edit was discarded"
-		_ = os.WriteFile(f.editorTemp, []byte(f.editorAccepted), 0o644)
-
-		return
-	}
-
-	fm.errMsg = ""
-	f.editorAccepted = content
-	f.editorChanged = trimEOL(content) != trimEOL(f.editorOriginal)
-}
-
-func (fm *form) close() {
-	for _, f := range fm.fields {
-		if f.editorTemp != "" {
-			_ = os.Remove(f.editorTemp)
-		}
-	}
-}
-
-func (f *formField) editedSource() string {
-	if f.editorChanged {
-		return f.editorTemp
-	}
-
-	return ""
 }

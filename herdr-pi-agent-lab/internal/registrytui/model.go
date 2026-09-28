@@ -250,10 +250,6 @@ func (m Model) handleAgentDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.prevScreen = screenAgentDetail
 		m.form = newVersionCreateForm(m.root, m.selectedAgent.ID)
 		m.screen = screenForm
-	case "e":
-		m.prevScreen = screenAgentDetail
-		m.form = newAgentUpdateForm(m.root, m.selectedAgent)
-		m.screen = screenForm
 	case "d":
 		m.prevScreen = screenAgentDetail
 		agent := m.selectedAgent
@@ -275,10 +271,6 @@ func (m Model) handleVersionDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.screen = screenAgentDetail
 	case "r":
 		return m.startRun(m.selectedAgent.ID, m.selectedVersion.VersionID, screenVersionDetail)
-	case "e":
-		m.prevScreen = screenVersionDetail
-		m.form = newVersionUpdateForm(m.root, m.selectedAgent.ID, m.selectedVersion)
-		m.screen = screenForm
 	case "d":
 		m.prevScreen = screenVersionDetail
 		agentID, versionID := m.selectedAgent.ID, m.selectedVersion.VersionID
@@ -300,10 +292,6 @@ func (m Model) handleTaskDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.screen = screenList
 	case "r":
 		return m.startRunForTask(m.selectedTask.ID, screenTaskDetail)
-	case "e":
-		m.prevScreen = screenTaskDetail
-		m.form = newTaskUpdateForm(m.root, m.selectedTask)
-		m.screen = screenForm
 	case "d":
 		m.prevScreen = screenTaskDetail
 		task := m.selectedTask
@@ -379,16 +367,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmd, submitted, cancelled := m.form.handleKey(msg)
 		if cancelled {
 			m.screen = m.prevScreen
-			m.form.close()
 			m.form = nil
 
 			return m, nil
 		}
 		if submitted {
 			m.screen = m.prevScreen
-			m.form.close()
 			m.form = nil
-			m.status = "saved"
+			m.status = "created"
 
 			return m, loadData()
 		}
@@ -507,12 +493,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 
 		return m, nil
-	case editorDoneMsg:
-		if m.form != nil {
-			m.form.handleEditorDone(msg)
-		}
-
-		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -576,11 +556,11 @@ func (m Model) viewTaskDetail(b *strings.Builder) {
 func (m Model) helpText() string {
 	switch m.screen {
 	case screenAgentDetail:
-		return "j/k move  enter open version  n new version  e edit agent  d delete agent  esc back  q quit"
+		return "j/k move  enter open version  n new version  d delete agent  esc back  q quit"
 	case screenVersionDetail:
-		return "r run  e edit  d delete  esc back  q quit"
+		return "r run  d delete  esc back  q quit"
 	case screenTaskDetail:
-		return "r run  e edit  d delete  esc back  q quit"
+		return "r run  d delete  esc back  q quit"
 	default:
 		return "tab switch agents/tasks  j/k move  enter open  n new  q quit"
 	}

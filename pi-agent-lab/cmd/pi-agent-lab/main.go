@@ -18,7 +18,6 @@ func main() {
 	root.AddCommand(commands.NewCreateCommand())
 	root.AddCommand(commands.NewListCommand())
 	root.AddCommand(commands.NewShowCommand())
-	root.AddCommand(commands.NewUpdateCommand())
 	root.AddCommand(commands.NewDeleteCommand())
 	root.AddCommand(commands.NewInvocationCommand())
 	root.AddCommand(commands.NewConfigCommand())

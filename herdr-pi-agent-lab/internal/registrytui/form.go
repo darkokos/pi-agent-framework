@@ -20,7 +20,6 @@ const (
 	kindPicker
 	kindModelPicker
 	kindPath
-	kindEditor
 )
 
 const pickerVisibleLimit = 8
@@ -48,12 +47,6 @@ type formField struct {
 	resolvedProvider string
 
 	visible func() bool
-
-	editorLoad     func() (string, error)
-	editorOriginal string
-	editorAccepted string
-	editorTemp     string
-	editorChanged  bool
 }
 
 type form struct {
@@ -371,17 +364,6 @@ func (fm *form) handleKey(msg tea.KeyMsg) (tea.Cmd, bool, bool) {
 		field.refilterPath()
 
 		return cmd, false, false
-	case kindEditor:
-		if msg.String() == "enter" {
-			fm.errMsg = ""
-
-			cmd, err := field.openEditor()
-			if err != nil {
-				fm.errMsg = err.Error()
-			}
-
-			return cmd, false, false
-		}
 	case kindText:
 		var cmd tea.Cmd
 		field.input, cmd = field.input.Update(msg)
@@ -502,15 +484,6 @@ func (fm *form) view() string {
 			if focused {
 				b.WriteString(dimStyle.Render(" (tab complete, up/down move, enter select)"))
 				writePickerMatches(&b, f)
-			}
-		case kindEditor:
-			if f.editorChanged {
-				b.WriteString(okStyle.Render("edited - applied when you save"))
-			} else {
-				b.WriteString(dimStyle.Render("unchanged"))
-			}
-			if focused {
-				b.WriteString(dimStyle.Render(" (enter to edit in $EDITOR)"))
 			}
 		case kindModelPicker:
 			b.WriteString(f.input.View())

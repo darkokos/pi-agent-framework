@@ -98,53 +98,6 @@ func newShowTaskCommand() *cobra.Command {
 	}
 }
 
-func newUpdateTaskCommand() *cobra.Command {
-	var promptFile, notes string
-
-	cmd := &cobra.Command{
-		Use:               "task <task-id>",
-		Short:             "Update fields of an existing task",
-		Args:              cobra.ExactArgs(1),
-		ValidArgsFunction: completeTaskIDs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			root, err := registry.ResolveRoot()
-			if err != nil {
-				return err
-			}
-
-			task, err := registry.GetTask(root, args[0])
-			if err != nil {
-				return err
-			}
-
-			if cmd.Flags().Changed("notes") {
-				task.Notes = notes
-			}
-
-			newPromptFile := ""
-			if cmd.Flags().Changed("prompt-file") {
-				newPromptFile = promptFile
-			}
-
-			updated, err := registry.ReplaceTask(root, task, newPromptFile)
-			if err != nil {
-				return err
-			}
-
-			fmt.Fprintf(cmd.OutOrStdout(), "updated task %q\n", updated.ID)
-
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&promptFile, "prompt-file", "", "path to replacement task prompt text")
-	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this task")
-
-	_ = cmd.RegisterFlagCompletionFunc("prompt-file", completeFilePaths)
-
-	return cmd
-}
-
 func newDeleteTaskCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:               "task <task-id>",
