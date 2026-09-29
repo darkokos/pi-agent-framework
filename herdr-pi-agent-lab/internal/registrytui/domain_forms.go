@@ -160,13 +160,25 @@ func versionSettingsFields(root string) []*formField {
 		return mode == "allowlist" || mode == "denylist"
 	}
 
-	extensionSourcesHelp := "comma-separated, always loaded regardless of isolate: a package reference (npm:name@1.2.3 or git:host/repo@ref, pinned to a version), an absolute path (works only on this machine), or type ./ or ../ to browse a path relative to the registry directory"
+	extensionSourcesHelp := "comma-separated, always loaded regardless of isolate: a package reference (npm:name@1.2.3 or git:host/repo@ref, pinned to a version), or a path — type ~, /, . or .. to browse"
 	if root != "" {
-		extensionSourcesHelp += " (" + root + ")"
+		extensionSourcesHelp += "; ./ and ../ browse the registry directory (" + root + ")"
 	}
 
 	extensionSourcesField := newPickerField("Extension Sources", extensionSourcesHelp, "npm:name@1.2.3", discoverExtensionSources(), "", true)
+	extensionSourcesField.browsePaths = true
 	extensionSourcesField.pathBase = root
+
+	cwd, _ := os.Getwd()
+
+	skillPathsHelp := "comma-separated, copied into the registry so the version stays portable; type ~, /, . or .. to browse"
+	if cwd != "" {
+		skillPathsHelp += "; ./ and ../ browse the current directory (" + cwd + ")"
+	}
+
+	skillPathsField := newPickerField("Skill Paths", skillPathsHelp, "/path/to/skill", discoverSkillPaths(), "", true)
+	skillPathsField.browsePaths = true
+	skillPathsField.pathBase = cwd
 
 	return []*formField{
 		newEnumField("System Prompt Mode", "replace: the prompt takes the place of Pi's default system prompt; append: it is added after Pi's default one", validate.SystemPromptModes, validate.SystemPromptModes[0]),
@@ -177,7 +189,7 @@ func versionSettingsFields(root string) []*formField {
 		newBoolField("Extensions Isolate", "don't load extensions from your Pi setup; the ones below still load", false),
 		extensionSourcesField,
 		newBoolField("Skills Isolate", "don't load skills from your Pi setup; the ones below still load", false),
-		newPickerField("Skill Paths", "comma-separated, copied into the registry so the version stays portable; not limited to the suggestions", "/path/to/skill", discoverSkillPaths(), "", true),
+		skillPathsField,
 		newTextField("Notes", "", "", ""),
 	}
 }

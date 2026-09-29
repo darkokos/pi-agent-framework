@@ -76,21 +76,40 @@ func pathMatches(text string) []string {
 	return append(dirs, files...)
 }
 
-func registryPathMatches(root, query string) []string {
+func pathBrowseMatches(relBase, query string) []string {
 	switch query {
+	case "~":
+		return []string{"~/"}
 	case ".":
 		return []string{"./", "../"}
 	case "..":
 		return []string{"../"}
 	}
 
-	if !strings.HasPrefix(query, "./") && !strings.HasPrefix(query, "../") {
+	dir, base := splitPath(query)
+
+	var listDir string
+	switch {
+	case strings.HasPrefix(dir, "~/"):
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return []string{}
+		}
+
+		listDir = filepath.Join(home, dir[2:])
+	case strings.HasPrefix(dir, "/"):
+		listDir = dir
+	case strings.HasPrefix(dir, "./") || strings.HasPrefix(dir, "../"):
+		if relBase == "" {
+			return []string{}
+		}
+
+		listDir = filepath.Join(relBase, dir)
+	default:
 		return nil
 	}
 
-	dir, base := splitPath(query)
-
-	entries, err := os.ReadDir(filepath.Join(root, dir))
+	entries, err := os.ReadDir(listDir)
 	if err != nil {
 		return []string{}
 	}
@@ -104,7 +123,7 @@ func registryPathMatches(root, query string) []string {
 
 		isDir := e.IsDir()
 		if e.Type()&os.ModeSymlink != 0 {
-			if st, err := os.Stat(filepath.Join(root, dir, name)); err == nil && st.IsDir() {
+			if st, err := os.Stat(filepath.Join(listDir, name)); err == nil && st.IsDir() {
 				isDir = true
 			}
 		}

@@ -39,6 +39,7 @@ type formField struct {
 	pickerMatches []string
 	pickerCursor  int
 	appendMode    bool
+	browsePaths   bool
 	pathBase      string
 
 	modelOptions []validate.ModelEntry
@@ -96,8 +97,8 @@ func (f *formField) refilterPicker() {
 		rawQuery = strings.TrimSpace(rawQuery)
 	}
 
-	if f.pathBase != "" {
-		if matches := registryPathMatches(f.pathBase, rawQuery); matches != nil {
+	if f.browsePaths {
+		if matches := pathBrowseMatches(f.pathBase, rawQuery); matches != nil {
 			f.pickerMatches = matches
 			if f.pickerCursor >= len(f.pickerMatches) {
 				f.pickerCursor = 0
