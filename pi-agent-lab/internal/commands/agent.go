@@ -21,6 +21,22 @@ func writeItemList(w io.Writer, label, header string, items []string) {
 	}
 }
 
+func dedupePreserveOrder(items []string) []string {
+	seen := make(map[string]bool, len(items))
+
+	out := items[:0]
+	for _, item := range items {
+		if seen[item] {
+			continue
+		}
+
+		seen[item] = true
+		out = append(out, item)
+	}
+
+	return out
+}
+
 const systemPromptModeHelp = "replace|append: whether the prompt replaces Pi's default system prompt or is added to it"
 
 func requireValidThinkingLevel(thinking string) error {
@@ -415,7 +431,9 @@ func newShowAgentCommand() *cobra.Command {
 }
 
 func newShowAgentVersionCommand() *cobra.Command {
-	return &cobra.Command{
+	var expandSkills []string
+
+	cmd := &cobra.Command{
 		Use:               "agent-version <agent-id>@<version-id>",
 		Short:             "Show full details of a single agent version",
 		Args:              cobra.ExactArgs(1),
@@ -436,21 +454,77 @@ func newShowAgentVersionCommand() *cobra.Command {
 				return err
 			}
 
+			expandSkills = dedupePreserveOrder(expandSkills)
+
+			for _, name := range expandSkills {
+				if slices.Contains(version.Skills.Names, name) {
+					continue
+				}
+				if len(version.Skills.Names) == 0 {
+					return fmt.Errorf("skill %q is not registered for %s@%s: this version has no skills", name, agentID, versionID)
+				}
+
+				return fmt.Errorf("skill %q is not registered for %s@%s (available: %s)", name, agentID, versionID, strings.Join(version.Skills.Names, ", "))
+			}
+
 			tw := format.NewTabWriter(cmd.OutOrStdout())
 			fmt.Fprintf(tw, "Agent ID:\t%s\n", version.AgentID)
 			fmt.Fprintf(tw, "Version ID:\t%s\n", version.VersionID)
 			fmt.Fprintf(tw, "Model:\t%s\n", version.Model)
 			fmt.Fprintf(tw, "Provider:\t%s\n", version.Provider)
 			fmt.Fprintf(tw, "Thinking:\t%s\n", version.Thinking)
-			fmt.Fprintf(tw, "System Prompt:\t%s (%s)\n", version.SystemPrompt.File, version.SystemPrompt.Mode)
+			fmt.Fprintf(tw, "System Prompt File:\t%s (%s)\n", registry.VersionSystemPromptPath(root, agentID, versionID), version.SystemPrompt.Mode)
 			writeItemList(tw, "Tools:", version.Tools.Mode, version.Tools.Names)
 			writeItemList(tw, "Extensions:", fmt.Sprintf("isolate=%t", version.Extensions.Isolate), version.Extensions.Sources)
 			writeItemList(tw, "Skills:", fmt.Sprintf("isolate=%t", version.Skills.Isolate), version.Skills.Names)
 			fmt.Fprintf(tw, "Notes:\t%s\n", version.Notes)
+			if err := tw.Flush(); err != nil {
+				return err
+			}
 
-			return tw.Flush()
+			systemPrompt, err := registry.ReadVersionSystemPrompt(root, agentID, versionID)
+			if err != nil {
+				return fmt.Errorf("reading system prompt: %w", err)
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), "System Prompt:")
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprint(cmd.OutOrStdout(), format.RenderMarkdown(systemPrompt))
+
+			if len(expandSkills) == 0 {
+				if len(version.Skills.Names) > 0 {
+					fmt.Fprintln(cmd.OutOrStdout())
+					fmt.Fprintln(cmd.OutOrStdout(), "pass --skill <name> to see a skill's content (repeatable)")
+				}
+
+				return nil
+			}
+
+			for _, name := range expandSkills {
+				content, err := registry.ReadSkillContent(root, agentID, versionID, name)
+
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintf(cmd.OutOrStdout(), "Skill: %s\n", name)
+				fmt.Fprintln(cmd.OutOrStdout())
+
+				if err != nil {
+					fmt.Fprintf(cmd.OutOrStdout(), "error reading skill: %v\n", err)
+
+					continue
+				}
+
+				fmt.Fprint(cmd.OutOrStdout(), format.RenderMarkdown(content))
+			}
+
+			return nil
 		},
 	}
+
+	cmd.Flags().StringArrayVar(&expandSkills, "skill", nil, "show this skill's full content, repeatable; by default only skill names are listed to avoid flooding the output")
+	_ = cmd.RegisterFlagCompletionFunc("skill", completeSkillNames)
+
+	return cmd
 }
 
 func newDeleteAgentCommand() *cobra.Command {

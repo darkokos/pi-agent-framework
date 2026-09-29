@@ -65,6 +65,8 @@ type Model struct {
 	agentsCursor   int
 	tasksCursor    int
 	versionsCursor int
+	skillsCursor   int
+	expandedSkill  string
 
 	selectedAgent   *registry.Agent
 	selectedVersion *registry.AgentVersion
@@ -252,6 +254,8 @@ func (m Model) handleAgentDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 
 			m.selectedVersion = v
+			m.skillsCursor = 0
+			m.expandedSkill = ""
 			m.screen = screenVersionDetail
 		}
 	case "n":
@@ -278,6 +282,8 @@ func (m Model) handleAgentDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleVersionDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.status, m.notices, m.warnings = "", nil, nil
 
+	skills := m.selectedVersion.Skills.Names
+
 	switch msg.String() {
 	case "esc", "backspace":
 		m.selectedVersion = nil
@@ -291,6 +297,25 @@ func (m Model) handleVersionDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.confirmAction = func() error { return registry.DeleteAgentVersion(m.root, agentID, versionID) }
 		m.confirmTarget = confirmDeleteVersion
 		m.screen = screenConfirm
+	case "up", "k":
+		if m.skillsCursor > 0 {
+			m.skillsCursor--
+		}
+	case "down", "j":
+		if m.skillsCursor < len(skills)-1 {
+			m.skillsCursor++
+		}
+	case "enter", " ":
+		if len(skills) == 0 {
+			return m, nil
+		}
+
+		name := skills[m.skillsCursor]
+		if m.expandedSkill == name {
+			m.expandedSkill = ""
+		} else {
+			m.expandedSkill = name
+		}
 	}
 
 	return m, nil
@@ -565,16 +590,55 @@ func (m Model) viewAgentDetail(b *strings.Builder) {
 
 func (m Model) viewVersionDetail(b *strings.Builder) {
 	v := m.selectedVersion
-	m.writeField(b, "Agent ID:       %s", v.AgentID)
-	m.writeField(b, "Version ID:     %s", v.VersionID)
-	m.writeField(b, "Model:          %s", v.Model)
-	m.writeField(b, "Provider:       %s", v.Provider)
-	m.writeField(b, "Thinking:       %s", v.Thinking)
-	m.writeField(b, "System Prompt:  %s (%s)", v.SystemPrompt.File, v.SystemPrompt.Mode)
-	m.writeList(b, "Tools:          ", v.Tools.Mode, v.Tools.Names)
-	m.writeList(b, "Extensions:     ", fmt.Sprintf("isolate=%t", v.Extensions.Isolate), v.Extensions.Sources)
-	m.writeList(b, "Skills:         ", fmt.Sprintf("isolate=%t", v.Skills.Isolate), v.Skills.Names)
-	m.writeField(b, "Notes:          %s", v.Notes)
+	m.writeField(b, "Agent ID:            %s", v.AgentID)
+	m.writeField(b, "Version ID:          %s", v.VersionID)
+	m.writeField(b, "Model:               %s", v.Model)
+	m.writeField(b, "Provider:            %s", v.Provider)
+	m.writeField(b, "Thinking:            %s", v.Thinking)
+	m.writeField(b, "System Prompt File:  %s (%s)", registry.VersionSystemPromptPath(m.root, v.AgentID, v.VersionID), v.SystemPrompt.Mode)
+	m.writeList(b, "Tools:               ", v.Tools.Mode, v.Tools.Names)
+	m.writeList(b, "Extensions:          ", fmt.Sprintf("isolate=%t", v.Extensions.Isolate), v.Extensions.Sources)
+	m.writeSkillsList(b, fmt.Sprintf("isolate=%t", v.Skills.Isolate), v.Skills.Names)
+	m.writeField(b, "Notes:               %s", v.Notes)
+	b.WriteString("\n")
+
+	systemPrompt, err := registry.ReadVersionSystemPrompt(m.root, v.AgentID, v.VersionID)
+	if err != nil {
+		b.WriteString(errStyle.Width(m.width).Render(fmt.Sprintf("error reading system prompt: %v", err)))
+		b.WriteString("\n")
+	} else {
+		b.WriteString(dimStyle.Render("System Prompt:"))
+		b.WriteString("\n")
+		b.WriteString(theme.RenderMarkdown(systemPrompt, m.width))
+		b.WriteString("\n")
+	}
+
+	if m.expandedSkill != "" {
+		b.WriteString("\n")
+
+		content, err := registry.ReadSkillContent(m.root, v.AgentID, v.VersionID, m.expandedSkill)
+		if err != nil {
+			b.WriteString(errStyle.Width(m.width).Render(fmt.Sprintf("error reading skill %q: %v", m.expandedSkill, err)))
+			b.WriteString("\n")
+		} else {
+			b.WriteString(dimStyle.Render(fmt.Sprintf("Skill: %s", m.expandedSkill)))
+			b.WriteString("\n")
+			b.WriteString(theme.RenderMarkdown(content, m.width))
+		}
+	}
+}
+
+func (m Model) writeSkillsList(b *strings.Builder, header string, names []string) {
+	m.writeField(b, "Skills:              %s", header)
+
+	for i, name := range names {
+		marker := "▸"
+		if name == m.expandedSkill {
+			marker = "▾"
+		}
+
+		writeRow(b, marker+" "+name, i == m.skillsCursor, m.width)
+	}
 }
 
 func (m Model) viewTaskDetail(b *strings.Builder) {
@@ -603,6 +667,10 @@ func (m Model) helpText() string {
 	case screenAgentDetail:
 		return "j/k move  enter open version  n new version  d delete agent  esc back  q quit"
 	case screenVersionDetail:
+		if len(m.selectedVersion.Skills.Names) > 0 {
+			return "j/k select skill  enter expand/collapse  r run  d delete  esc back  q quit"
+		}
+
 		return "r run  d delete  esc back  q quit"
 	case screenTaskDetail:
 		return "r run  d delete  esc back  q quit"

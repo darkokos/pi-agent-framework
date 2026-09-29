@@ -272,3 +272,33 @@ func completeAgentVersionCompound(_ *cobra.Command, _ []string, toComplete strin
 
 	return out, cobra.ShellCompDirectiveNoSpace | cobra.ShellCompDirectiveNoFileComp
 }
+
+func completeSkillNames(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) < 1 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	agentID, versionID, err := parseAgentVersionRef(args[0])
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	root, err := registry.ResolveRoot()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	version, err := registry.GetAgentVersion(root, agentID, versionID)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var out []string
+	for _, name := range version.Skills.Names {
+		if strings.HasPrefix(name, toComplete) {
+			out = append(out, name)
+		}
+	}
+
+	return out, cobra.ShellCompDirectiveNoFileComp
+}

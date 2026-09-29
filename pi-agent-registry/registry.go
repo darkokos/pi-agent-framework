@@ -53,6 +53,10 @@ func GetTask(root, taskID string) (*Task, error) {
 	return &task, nil
 }
 
+func VersionSystemPromptPath(root, agentID, versionID string) string {
+	return versionSystemPromptFile(root, agentID, versionID)
+}
+
 func ReadVersionSystemPrompt(root, agentID, versionID string) (string, error) {
 	content, err := os.ReadFile(versionSystemPromptFile(root, agentID, versionID))
 	if err != nil {

@@ -12,6 +12,26 @@ func VersionSkillsDir(root, agentID, versionID string) string {
 	return versionSkillsDir(root, agentID, versionID)
 }
 
+func ReadSkillContent(root, agentID, versionID, name string) (string, error) {
+	path := filepath.Join(versionSkillsDir(root, agentID, versionID), name)
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+
+	if info.IsDir() {
+		path = filepath.Join(path, "SKILL.md")
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	return string(content), nil
+}
+
 func copySkills(dst string, sources []string) ([]string, error) {
 	var names []string
 
