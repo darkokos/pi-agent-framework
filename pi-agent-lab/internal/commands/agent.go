@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,6 +13,13 @@ import (
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 	"github.com/darkokos/pi-agent-framework/pi-agent-validate"
 )
+
+func writeItemList(w io.Writer, label, header string, items []string) {
+	fmt.Fprintf(w, "%s\t%s\n", label, header)
+	for _, item := range items {
+		fmt.Fprintf(w, "\t  - %s\n", item)
+	}
+}
 
 const systemPromptModeHelp = "replace|append: whether the prompt replaces Pi's default system prompt or is added to it"
 
@@ -435,9 +443,9 @@ func newShowAgentVersionCommand() *cobra.Command {
 			fmt.Fprintf(tw, "Provider:\t%s\n", version.Provider)
 			fmt.Fprintf(tw, "Thinking:\t%s\n", version.Thinking)
 			fmt.Fprintf(tw, "System Prompt:\t%s (%s)\n", version.SystemPrompt.File, version.SystemPrompt.Mode)
-			fmt.Fprintf(tw, "Tools:\t%s %s\n", version.Tools.Mode, strings.Join(version.Tools.Names, ", "))
-			fmt.Fprintf(tw, "Extensions:\t isolate=%t %s\n", version.Extensions.Isolate, strings.Join(version.Extensions.Sources, ", "))
-			fmt.Fprintf(tw, "Skills:\t isolate=%t %s\n", version.Skills.Isolate, strings.Join(version.Skills.Names, ", "))
+			writeItemList(tw, "Tools:", version.Tools.Mode, version.Tools.Names)
+			writeItemList(tw, "Extensions:", fmt.Sprintf("isolate=%t", version.Extensions.Isolate), version.Extensions.Sources)
+			writeItemList(tw, "Skills:", fmt.Sprintf("isolate=%t", version.Skills.Isolate), version.Skills.Names)
 			fmt.Fprintf(tw, "Notes:\t%s\n", version.Notes)
 
 			return tw.Flush()

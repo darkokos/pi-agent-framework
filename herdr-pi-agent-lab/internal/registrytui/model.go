@@ -535,6 +535,13 @@ func (m Model) writeField(b *strings.Builder, format string, args ...any) {
 	b.WriteString("\n")
 }
 
+func (m Model) writeList(b *strings.Builder, label, header string, items []string) {
+	m.writeField(b, "%s%s", label, header)
+	for _, item := range items {
+		m.writeField(b, "  - %s", item)
+	}
+}
+
 func (m Model) viewAgentDetail(b *strings.Builder) {
 	a := m.selectedAgent
 	b.WriteString(theme.Wrap(m.width, headerStyle.Render("Agent "+a.ID)))
@@ -564,9 +571,9 @@ func (m Model) viewVersionDetail(b *strings.Builder) {
 	m.writeField(b, "Provider:       %s", v.Provider)
 	m.writeField(b, "Thinking:       %s", v.Thinking)
 	m.writeField(b, "System Prompt:  %s (%s)", v.SystemPrompt.File, v.SystemPrompt.Mode)
-	m.writeField(b, "Tools:          %s %s", v.Tools.Mode, strings.Join(v.Tools.Names, ","))
-	m.writeField(b, "Extensions:     isolate=%t %s", v.Extensions.Isolate, strings.Join(v.Extensions.Sources, ","))
-	m.writeField(b, "Skills:         isolate=%t %s", v.Skills.Isolate, strings.Join(v.Skills.Names, ","))
+	m.writeList(b, "Tools:          ", v.Tools.Mode, v.Tools.Names)
+	m.writeList(b, "Extensions:     ", fmt.Sprintf("isolate=%t", v.Extensions.Isolate), v.Extensions.Sources)
+	m.writeList(b, "Skills:         ", fmt.Sprintf("isolate=%t", v.Skills.Isolate), v.Skills.Names)
 	m.writeField(b, "Notes:          %s", v.Notes)
 }
 
