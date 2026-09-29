@@ -581,8 +581,21 @@ func (m Model) viewTaskDetail(b *strings.Builder) {
 	t := m.selectedTask
 	m.writeField(b, "ID:           %s", t.ID)
 	m.writeField(b, "Name:         %s", t.Name)
-	m.writeField(b, "Prompt File:  %s", t.PromptFile)
+	m.writeField(b, "Prompt File:  %s", registry.TaskPromptPath(m.root, t.ID))
 	m.writeField(b, "Notes:        %s", t.Notes)
+	b.WriteString("\n")
+
+	prompt, err := registry.ReadTaskPrompt(m.root, t.ID)
+	if err != nil {
+		b.WriteString(errStyle.Width(m.width).Render(fmt.Sprintf("error reading prompt: %v", err)))
+		b.WriteString("\n")
+
+		return
+	}
+
+	b.WriteString(dimStyle.Render("Prompt:"))
+	b.WriteString("\n")
+	b.WriteString(theme.RenderMarkdown(prompt, m.width))
 }
 
 func (m Model) helpText() string {

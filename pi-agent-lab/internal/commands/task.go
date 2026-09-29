@@ -92,10 +92,23 @@ func newShowTaskCommand() *cobra.Command {
 			tw := format.NewTabWriter(cmd.OutOrStdout())
 			fmt.Fprintf(tw, "ID:\t%s\n", task.ID)
 			fmt.Fprintf(tw, "Name:\t%s\n", task.Name)
-			fmt.Fprintf(tw, "Prompt File:\t%s\n", task.PromptFile)
+			fmt.Fprintf(tw, "Prompt File:\t%s\n", registry.TaskPromptPath(root, task.ID))
 			fmt.Fprintf(tw, "Notes:\t%s\n", task.Notes)
+			if err := tw.Flush(); err != nil {
+				return err
+			}
 
-			return tw.Flush()
+			prompt, err := registry.ReadTaskPrompt(root, task.ID)
+			if err != nil {
+				return fmt.Errorf("reading task prompt: %w", err)
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprintln(cmd.OutOrStdout(), "Prompt:")
+			fmt.Fprintln(cmd.OutOrStdout())
+			fmt.Fprint(cmd.OutOrStdout(), format.RenderMarkdown(prompt))
+
+			return nil
 		},
 	}
 }

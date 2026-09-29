@@ -66,6 +66,15 @@ func TaskPromptPath(root, taskID string) string {
 	return taskPromptFile(root, taskID)
 }
 
+func ReadTaskPrompt(root, taskID string) (string, error) {
+	content, err := os.ReadFile(taskPromptFile(root, taskID))
+	if err != nil {
+		return "", err
+	}
+
+	return string(content), nil
+}
+
 func CreateAgent(root, id, name, description string) (*Agent, error) {
 	file := agentFile(root, id)
 	if _, err := os.Stat(file); err == nil {
