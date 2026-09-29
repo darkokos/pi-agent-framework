@@ -219,6 +219,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.form = newTaskCreateForm(m.root)
 		}
 
+		m.form.setWidth(m.width)
 		m.screen = screenForm
 	}
 
@@ -260,6 +261,7 @@ func (m Model) handleAgentDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		m.prevScreen = screenAgentDetail
 		m.form = newVersionCreateForm(m.root, m.selectedAgent.ID)
+		m.form.setWidth(m.width)
 		m.screen = screenForm
 	case "d":
 		m.prevScreen = screenAgentDetail
@@ -503,6 +505,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		if m.form != nil {
+			m.form.setWidth(m.width)
+		}
 
 		return m, nil
 	case tea.KeyMsg:
@@ -512,7 +517,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func writeRow(b *strings.Builder, line string, selected bool) {
+func writeRow(b *strings.Builder, line string, selected bool, width int) {
+	line = theme.Wrap(matchWidth(width), line)
+
 	if selected {
 		b.WriteString(selectedStyle.Render("> " + line))
 	} else {
@@ -523,14 +530,19 @@ func writeRow(b *strings.Builder, line string, selected bool) {
 	b.WriteString("\n")
 }
 
+func (m Model) writeField(b *strings.Builder, format string, args ...any) {
+	b.WriteString(theme.Wrap(m.width, fmt.Sprintf(format, args...)))
+	b.WriteString("\n")
+}
+
 func (m Model) viewAgentDetail(b *strings.Builder) {
 	a := m.selectedAgent
-	b.WriteString(headerStyle.Render("Agent " + a.ID))
+	b.WriteString(theme.Wrap(m.width, headerStyle.Render("Agent "+a.ID)))
 	b.WriteString("\n")
-	fmt.Fprintf(b, "ID:           %s\n", a.ID)
-	fmt.Fprintf(b, "Name:         %s\n", a.Name)
-	fmt.Fprintf(b, "Description:  %s\n\n", a.Description)
-	b.WriteString("Versions:\n")
+	m.writeField(b, "ID:           %s", a.ID)
+	m.writeField(b, "Name:         %s", a.Name)
+	m.writeField(b, "Description:  %s", a.Description)
+	b.WriteString("\nVersions:\n")
 
 	if len(a.Versions) == 0 {
 		b.WriteString(dimStyle.Render("no versions yet — press n to create one"))
@@ -540,29 +552,29 @@ func (m Model) viewAgentDetail(b *strings.Builder) {
 	}
 
 	for i, v := range a.Versions {
-		writeRow(b, v, i == m.versionsCursor)
+		writeRow(b, v, i == m.versionsCursor, m.width)
 	}
 }
 
 func (m Model) viewVersionDetail(b *strings.Builder) {
 	v := m.selectedVersion
-	fmt.Fprintf(b, "Agent ID:       %s\n", v.AgentID)
-	fmt.Fprintf(b, "Version ID:     %s\n", v.VersionID)
-	fmt.Fprintf(b, "Model:          %s\n", v.Model)
-	fmt.Fprintf(b, "Provider:       %s\n", v.Provider)
-	fmt.Fprintf(b, "Thinking:       %s\n", v.Thinking)
-	fmt.Fprintf(b, "System Prompt:  %s (%s)\n", v.SystemPrompt.File, v.SystemPrompt.Mode)
-	fmt.Fprintf(b, "Tools:          %s %s\n", v.Tools.Mode, strings.Join(v.Tools.Names, ","))
-	fmt.Fprintf(b, "Extensions:     isolate=%t %s\n", v.Extensions.Isolate, strings.Join(v.Extensions.Sources, ","))
-	fmt.Fprintf(b, "Skills:         isolate=%t %s\n", v.Skills.Isolate, strings.Join(v.Skills.Names, ","))
-	fmt.Fprintf(b, "Notes:          %s\n", v.Notes)
+	m.writeField(b, "Agent ID:       %s", v.AgentID)
+	m.writeField(b, "Version ID:     %s", v.VersionID)
+	m.writeField(b, "Model:          %s", v.Model)
+	m.writeField(b, "Provider:       %s", v.Provider)
+	m.writeField(b, "Thinking:       %s", v.Thinking)
+	m.writeField(b, "System Prompt:  %s (%s)", v.SystemPrompt.File, v.SystemPrompt.Mode)
+	m.writeField(b, "Tools:          %s %s", v.Tools.Mode, strings.Join(v.Tools.Names, ","))
+	m.writeField(b, "Extensions:     isolate=%t %s", v.Extensions.Isolate, strings.Join(v.Extensions.Sources, ","))
+	m.writeField(b, "Skills:         isolate=%t %s", v.Skills.Isolate, strings.Join(v.Skills.Names, ","))
+	m.writeField(b, "Notes:          %s", v.Notes)
 }
 
 func (m Model) viewTaskDetail(b *strings.Builder) {
 	t := m.selectedTask
-	fmt.Fprintf(b, "ID:           %s\n", t.ID)
-	fmt.Fprintf(b, "Prompt File:  %s\n", t.PromptFile)
-	fmt.Fprintf(b, "Notes:        %s\n", t.Notes)
+	m.writeField(b, "ID:           %s", t.ID)
+	m.writeField(b, "Prompt File:  %s", t.PromptFile)
+	m.writeField(b, "Notes:        %s", t.Notes)
 }
 
 func (m Model) helpText() string {
@@ -601,7 +613,7 @@ func (m Model) viewList(b *strings.Builder) {
 
 		for i, a := range m.agents {
 			line := fmt.Sprintf("%s  %s  (%d version(s))", a.ID, a.Name, len(a.Versions))
-			writeRow(b, line, i == m.agentsCursor)
+			writeRow(b, line, i == m.agentsCursor, m.width)
 		}
 
 		return
@@ -616,18 +628,19 @@ func (m Model) viewList(b *strings.Builder) {
 
 	for i, t := range m.tasks {
 		line := fmt.Sprintf("%s  %s", t.ID, t.PromptFile)
-		writeRow(b, line, i == m.tasksCursor)
+		writeRow(b, line, i == m.tasksCursor, m.width)
 	}
 }
 
 func (m Model) View() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Pi Agent Lab — Agents & Tasks"))
+	header := headerStyle.Render("Pi Agent Lab — Agents & Tasks")
 	if m.root != "" {
-		b.WriteString(dimStyle.Render(" - " + m.root))
+		header += dimStyle.Render(" - " + m.root)
 	}
 
+	b.WriteString(theme.Wrap(m.width, header))
 	b.WriteString("\n\n")
 
 	if m.err != nil {
@@ -639,11 +652,11 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 	}
 	for _, n := range m.notices {
-		b.WriteString(dimStyle.Render("note: " + n))
+		b.WriteString(dimStyle.Width(m.width).Render("note: " + n))
 		b.WriteString("\n")
 	}
 	for _, w := range m.warnings {
-		b.WriteString(attentionStyle.Render("warning: " + w))
+		b.WriteString(attentionStyle.Width(m.width).Render("warning: " + w))
 		b.WriteString("\n")
 	}
 	if len(m.notices) > 0 || len(m.warnings) > 0 {
@@ -694,7 +707,7 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render(m.helpText()))
+	b.WriteString(helpStyle.Width(m.width).Render(m.helpText()))
 
 	return b.String()
 }

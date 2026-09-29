@@ -288,7 +288,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func writeRow(b *strings.Builder, line string, selected bool) {
+func rowWidth(width int) int {
+	if width <= 0 {
+		return width
+	}
+
+	return max(width-2, 10)
+}
+
+func writeRow(b *strings.Builder, line string, selected bool, width int) {
+	line = theme.Wrap(rowWidth(width), line)
+
 	if selected {
 		b.WriteString(selectedStyle.Render("> " + line))
 	} else {
@@ -301,7 +311,7 @@ func writeRow(b *strings.Builder, line string, selected bool) {
 
 func (m Model) viewAgent(b *strings.Builder) {
 	if len(m.agents) == 0 {
-		b.WriteString(dimStyle.Render("no agents registered yet — add one from Agents & Tasks"))
+		b.WriteString(dimStyle.Width(m.width).Render("no agents registered yet — add one from Agents & Tasks"))
 		b.WriteString("\n")
 
 		return
@@ -309,15 +319,16 @@ func (m Model) viewAgent(b *strings.Builder) {
 
 	for i, a := range m.agents {
 		line := fmt.Sprintf("%s  %s  (%d version(s))", a.ID, a.Name, len(a.Versions))
-		writeRow(b, line, i == m.agentsCursor)
+		writeRow(b, line, i == m.agentsCursor, m.width)
 	}
 }
 
 func (m Model) viewVersion(b *strings.Builder) {
-	fmt.Fprintf(b, "Agent: %s\n\n", m.selectedAgent.ID)
+	b.WriteString(theme.Wrap(m.width, fmt.Sprintf("Agent: %s", m.selectedAgent.ID)))
+	b.WriteString("\n\n")
 
 	for i, v := range m.selectedAgent.Versions {
-		writeRow(b, v, i == m.versionsCursor)
+		writeRow(b, v, i == m.versionsCursor, m.width)
 	}
 }
 
@@ -333,11 +344,12 @@ func (m Model) helpText() string {
 func (m Model) View() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Pi Agent Lab — Start a run"))
+	header := headerStyle.Render("Pi Agent Lab — Start a run")
 	if m.root != "" {
-		b.WriteString(dimStyle.Render(" - " + m.root))
+		header += dimStyle.Render(" - " + m.root)
 	}
 
+	b.WriteString(theme.Wrap(m.width, header))
 	b.WriteString("\n\n")
 
 	if m.screen == screenRun && m.flow.Confirming() {
@@ -351,12 +363,12 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 	}
 	if m.status != "" {
-		b.WriteString(okStyle.Render(m.status))
+		b.WriteString(okStyle.Width(m.width).Render(m.status))
 		b.WriteString("\n\n")
 	}
 
 	if m.root == "" && m.err != nil {
-		b.WriteString(helpStyle.Render("q quit"))
+		b.WriteString(helpStyle.Width(m.width).Render("q quit"))
 
 		return b.String()
 	}
@@ -381,7 +393,7 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render(m.helpText()))
+	b.WriteString(helpStyle.Width(m.width).Render(m.helpText()))
 
 	return b.String()
 }

@@ -35,6 +35,7 @@ type Model struct {
 	root      string
 	suggested string
 	input     textinput.Model
+	width     int
 	err       error
 	status    string
 	loading   bool
@@ -125,6 +126,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 
 		return m, nil
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.input.Width = max(m.width-10, 10)
+
+		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -177,7 +183,7 @@ func (m Model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Pi Agent Lab — Config"))
+	b.WriteString(theme.Wrap(m.width, headerStyle.Render("Pi Agent Lab — Config")))
 	b.WriteString("\n\n")
 
 	if m.loading {
@@ -187,11 +193,11 @@ func (m Model) View() string {
 	}
 
 	if m.err != nil {
-		b.WriteString(errStyle.Render(fmt.Sprintf("error: %v", m.err)))
+		b.WriteString(errStyle.Width(m.width).Render(fmt.Sprintf("error: %v", m.err)))
 		b.WriteString("\n\n")
 	}
 	if m.status != "" {
-		b.WriteString(okStyle.Render(m.status))
+		b.WriteString(okStyle.Width(m.width).Render(m.status))
 		b.WriteString("\n\n")
 	}
 
@@ -199,32 +205,32 @@ func (m Model) View() string {
 		b.WriteString("Registry Directory:\n")
 		b.WriteString(m.input.View())
 		b.WriteString("\n\n")
-		b.WriteString(dimStyle.Render("persisted to ~/.config/pi-agent-lab/config.json"))
+		b.WriteString(dimStyle.Width(m.width).Render("persisted to ~/.config/pi-agent-lab/config.json"))
 		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Render("ctrl+w save  esc cancel"))
+		b.WriteString(helpStyle.Width(m.width).Render("ctrl+w save  esc cancel"))
 
 		return b.String()
 	}
 
 	if m.root == "" {
-		b.WriteString(attentionStyle.Render("No registry directory is set."))
-		b.WriteString("\n\nChoose where your agents and tasks are stored. Nothing works until you do.\n")
+		b.WriteString(attentionStyle.Width(m.width).Render("No registry directory is set."))
+		b.WriteString(theme.Wrap(m.width, "\n\nChoose where your agents and tasks are stored. Nothing works until you do.\n"))
 		if m.suggested != "" {
 			b.WriteString("\nSuggested location:\n")
-			b.WriteString(m.suggested)
+			b.WriteString(theme.Wrap(m.width, m.suggested))
 			b.WriteString("\n")
 		}
 
 		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("e choose a directory  d use the suggested location  q quit"))
+		b.WriteString(helpStyle.Width(m.width).Render("e choose a directory  d use the suggested location  q quit"))
 
 		return b.String()
 	}
 
 	b.WriteString("Registry Directory:\n")
-	b.WriteString(m.root)
+	b.WriteString(theme.Wrap(m.width, m.root))
 	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Render("e edit  d use the default location  q quit"))
+	b.WriteString(helpStyle.Width(m.width).Render("e edit  d use the default location  q quit"))
 
 	return b.String()
 }

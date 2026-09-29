@@ -26,6 +26,7 @@ type item struct {
 
 type Model struct {
 	cursor int
+	width  int
 	status string
 	err    error
 }
@@ -81,6 +82,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+
+		return m, nil
 	case openResultMsg:
 		m.err = msg.err
 		if msg.err == nil {
@@ -100,7 +105,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Pi Agent Lab"))
+	b.WriteString(theme.Wrap(m.width, headerStyle.Render("Pi Agent Lab")))
 	b.WriteString("\n\n")
 
 	for i, it := range items {
@@ -112,22 +117,26 @@ func (m Model) View() string {
 		}
 
 		b.WriteString("\n    ")
-		b.WriteString(theme.Dim.Render(it.description))
+		descWidth := m.width
+		if descWidth > 0 {
+			descWidth = max(descWidth-4, 10)
+		}
+		b.WriteString(theme.Dim.Width(descWidth).Render(it.description))
 		b.WriteString("\n\n")
 	}
 
 	b.WriteString("\n")
 
 	if m.err != nil {
-		b.WriteString(errStyle.Render("error: " + m.err.Error()))
+		b.WriteString(errStyle.Width(m.width).Render("error: " + m.err.Error()))
 		b.WriteString("\n\n")
 	}
 	if m.status != "" {
-		b.WriteString(okStyle.Render(m.status))
+		b.WriteString(okStyle.Width(m.width).Render(m.status))
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(helpStyle.Render("j/k move  enter open  q quit"))
+	b.WriteString(helpStyle.Width(m.width).Render("j/k move  enter open  q quit"))
 
 	return b.String()
 }

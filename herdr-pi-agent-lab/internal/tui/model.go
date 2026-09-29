@@ -140,6 +140,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resume = &c
 		}
 
+		m.overrideInput.Width = max(m.width-10, 10)
+
 		return m, nil
 	case resumeFinishedMsg:
 		m.resume = nil
@@ -293,14 +295,19 @@ func summarize(g *compare.TaskGroup) string {
 
 func (m Model) viewList(b *strings.Builder) {
 	if len(m.rows) == 0 {
-		b.WriteString(dimStyle.Render("no tasks registered yet — pi-agent-lab task create <id> ..."))
+		b.WriteString(dimStyle.Width(m.width).Render("no tasks registered yet — pi-agent-lab task create <id> ..."))
 		b.WriteString("\n")
 
 		return
 	}
 
+	rowWidth := m.width
+	if rowWidth > 0 {
+		rowWidth = max(rowWidth-2, 10)
+	}
+
 	for i, row := range m.rows {
-		line := fmt.Sprintf("%s  %s", row.task.ID, summarize(row.group))
+		line := theme.Wrap(rowWidth, fmt.Sprintf("%s  %s", row.task.ID, summarize(row.group)))
 		if i == m.cursor {
 			b.WriteString(selectedStyle.Render("> " + line))
 		} else {
@@ -338,18 +345,24 @@ func durationOrDash(p *float64) string {
 
 func (m Model) viewDetail(b *strings.Builder) {
 	row := m.rows[m.cursor]
-	b.WriteString(headerStyle.Render("task " + row.task.ID))
+	b.WriteString(theme.Wrap(m.width, headerStyle.Render("task "+row.task.ID)))
 	b.WriteString("\n\n")
 
 	if row.group == nil || (len(row.group.Rated) == 0 && len(row.group.Unrated) == 0) {
-		b.WriteString(dimStyle.Render("no runs recorded for this task yet"))
+		b.WriteString(dimStyle.Width(m.width).Render("no runs recorded for this task yet"))
 		b.WriteString("\n")
 		return
 	}
 
+	rowWidth := m.width
+	if rowWidth > 0 {
+		rowWidth = max(rowWidth-2, 10)
+	}
+
 	for i, r := range row.group.Rated {
-		fmt.Fprintf(b, "%d. %s  %s\n", i+1, r.SessionId, strOrDash(r.AgentVersion))
-		b.WriteString(resultStyle.Render(fmt.Sprintf("   outcome=%s rework=%s autonomy=%s  cost=$%.4f tokens=%.0f toolErrors=%d duration=%s",
+		b.WriteString(theme.Wrap(m.width, fmt.Sprintf("%d. %s  %s", i+1, r.SessionId, strOrDash(r.AgentVersion))))
+		b.WriteString("\n")
+		b.WriteString(resultStyle.Width(m.width).Render(fmt.Sprintf("   outcome=%s rework=%s autonomy=%s  cost=$%.4f tokens=%.0f toolErrors=%d duration=%s",
 			intOrDash(r.Outcome.Outcome), intOrDash(r.Outcome.Rework), intOrDash(r.Outcome.Autonomy),
 			r.Usage.CostUsd, compare.TotalTokens(r), r.Activity.ToolErrors, durationOrDash(r.DurationMs))))
 		b.WriteString("\n")
@@ -357,10 +370,10 @@ func (m Model) viewDetail(b *strings.Builder) {
 
 	if len(row.group.Unrated) > 0 {
 		b.WriteString("\n")
-		b.WriteString(attentionStyle.Render("needs rating:"))
+		b.WriteString(attentionStyle.Width(m.width).Render("needs rating:"))
 		b.WriteString("\n")
 		for i, r := range row.group.Unrated {
-			line := fmt.Sprintf("%s  %s", r.SessionId, strOrDash(r.AgentVersion))
+			line := theme.Wrap(rowWidth, fmt.Sprintf("%s  %s", r.SessionId, strOrDash(r.AgentVersion)))
 			if i == m.runCursor {
 				b.WriteString(selectedStyle.Render("> " + line))
 			} else {
@@ -376,16 +389,17 @@ func (m Model) viewDetail(b *strings.Builder) {
 func (m Model) View() string {
 	var b strings.Builder
 
-	b.WriteString(headerStyle.Render("Pi Agent Lab — Review Runs"))
+	header := headerStyle.Render("Pi Agent Lab — Review Runs")
 	if m.resolvedRoot != "" {
 		suffix := ""
 		if m.overrideRoot != nil {
 			suffix = " (override)"
 		}
 
-		b.WriteString(dimStyle.Render(" - " + m.resolvedRoot + suffix))
+		header += dimStyle.Render(" - " + m.resolvedRoot + suffix)
 	}
 
+	b.WriteString(theme.Wrap(m.width, header))
 	b.WriteString("\n\n")
 
 	if m.err != nil {
@@ -403,18 +417,18 @@ func (m Model) View() string {
 		b.WriteString("Registry path (empty clears override):\n")
 		b.WriteString(m.overrideInput.View())
 		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Render("enter confirm  esc cancel"))
+		b.WriteString(helpStyle.Width(m.width).Render("enter confirm  esc cancel"))
 
 		return b.String()
 	}
 
 	if m.status != "" {
-		b.WriteString(okStyle.Render(m.status))
+		b.WriteString(okStyle.Width(m.width).Render(m.status))
 		b.WriteString("\n\n")
 	}
 
 	if m.resolvedRoot == "" && m.err != nil && m.overrideRoot == nil {
-		b.WriteString(helpStyle.Render("o use a registry for this session  q quit"))
+		b.WriteString(helpStyle.Width(m.width).Render("o use a registry for this session  q quit"))
 
 		return b.String()
 	}
@@ -434,9 +448,9 @@ func (m Model) View() string {
 
 	b.WriteString("\n")
 	if m.view == viewDetail {
-		b.WriteString(helpStyle.Render("j/k select unrated run  r resume it to rate  esc back  q quit"))
+		b.WriteString(helpStyle.Width(m.width).Render("j/k select unrated run  r resume it to rate  esc back  q quit"))
 	} else {
-		b.WriteString(helpStyle.Render("j/k move  enter open  o override registry  q quit"))
+		b.WriteString(helpStyle.Width(m.width).Render("j/k move  enter open  o override registry  q quit"))
 	}
 
 	return b.String()

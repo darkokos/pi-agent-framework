@@ -181,22 +181,27 @@ func (f Flow) View() string {
 	var b strings.Builder
 
 	if f.err != nil {
-		b.WriteString(errStyle.Render(fmt.Sprintf("error: %v", f.err)))
+		b.WriteString(errStyle.Width(f.width).Render(fmt.Sprintf("error: %v", f.err)))
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(f.title)
+	b.WriteString(theme.Wrap(f.width, f.title))
 	b.WriteString("\n\n")
 
 	if len(f.items) == 0 {
-		b.WriteString(dimStyle.Render(f.empty))
+		b.WriteString(dimStyle.Width(f.width).Render(f.empty))
 		b.WriteString("\n")
 
 		return b.String()
 	}
 
+	rowWidth := f.width
+	if rowWidth > 0 {
+		rowWidth = max(rowWidth-2, 10)
+	}
+
 	for i, it := range f.items {
-		line := fmt.Sprintf("%s  %s", it.label, it.detail)
+		line := theme.Wrap(rowWidth, fmt.Sprintf("%s  %s", it.label, it.detail))
 		if i == f.cursor {
 			b.WriteString(selectedStyle.Render("> " + line))
 		} else {
@@ -208,7 +213,7 @@ func (f Flow) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("j/k move  enter pick  esc back  q quit"))
+	b.WriteString(dimStyle.Width(f.width).Render("j/k move  enter pick  esc back  q quit"))
 
 	return b.String()
 }

@@ -8,8 +8,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 	"github.com/darkokos/pi-agent-framework/pi-agent-validate"
 )
+
+const minFieldWidth = 10
 
 type fieldKind int
 
@@ -55,6 +58,7 @@ type form struct {
 	title    string
 	fields   []*formField
 	focus    int
+	width    int
 	errMsg   string
 	notices  []string
 	warnings []string
@@ -220,6 +224,19 @@ func (f *formField) blur() {
 	}
 }
 
+func (f *formField) setWidth(w int) {
+	if !f.hasInput() {
+		return
+	}
+
+	w -= 4
+	if w < minFieldWidth {
+		w = minFieldWidth
+	}
+
+	f.input.Width = w
+}
+
 func newForm(title string, fields []*formField, onSubmit func(f *form) error) *form {
 	fm := &form{title: title, fields: fields, onSubmit: onSubmit}
 	if len(fm.fields) > 0 {
@@ -228,6 +245,13 @@ func newForm(title string, fields []*formField, onSubmit func(f *form) error) *f
 	}
 
 	return fm
+}
+
+func (fm *form) setWidth(w int) {
+	fm.width = w
+	for _, f := range fm.fields {
+		f.setWidth(w)
+	}
 }
 
 func (f *formField) isVisible() bool {
@@ -402,7 +426,15 @@ func boolLabel(v bool) string {
 	return dimStyle.Render("false")
 }
 
-func writePickerMatches(b *strings.Builder, f *formField) {
+func matchWidth(width int) int {
+	if width <= 0 {
+		return width
+	}
+
+	return max(width-6, minFieldWidth)
+}
+
+func writePickerMatches(b *strings.Builder, f *formField, width int) {
 	if len(f.pickerMatches) == 0 {
 		b.WriteString("\n    ")
 		b.WriteString(dimStyle.Render("no matches"))
@@ -419,6 +451,7 @@ func writePickerMatches(b *strings.Builder, f *formField) {
 		}
 
 		b.WriteString("\n    ")
+		o = theme.Wrap(matchWidth(width), o)
 		if j == f.pickerCursor {
 			b.WriteString(selectedStyle.Render("> " + o))
 		} else {
@@ -428,7 +461,7 @@ func writePickerMatches(b *strings.Builder, f *formField) {
 	}
 }
 
-func writeModelMatches(b *strings.Builder, f *formField) {
+func writeModelMatches(b *strings.Builder, f *formField, width int) {
 	if len(f.modelMatches) == 0 {
 		b.WriteString("\n    ")
 		b.WriteString(dimStyle.Render("no matches"))
@@ -444,7 +477,7 @@ func writeModelMatches(b *strings.Builder, f *formField) {
 			break
 		}
 
-		line := fmt.Sprintf("%s  (%s)", e.Model, e.Provider)
+		line := theme.Wrap(matchWidth(width), fmt.Sprintf("%s  (%s)", e.Model, e.Provider))
 		b.WriteString("\n    ")
 		if j == f.pickerCursor {
 			b.WriteString(selectedStyle.Render("> " + line))
@@ -491,7 +524,7 @@ func (fm *form) view() string {
 			b.WriteString(f.input.View())
 			if focused {
 				b.WriteString(dimStyle.Render(" (type to filter, up/down move, enter select)"))
-				writePickerMatches(&b, f)
+				writePickerMatches(&b, f, fm.width)
 			}
 		case kindPath:
 			b.WriteString(f.input.View())
@@ -503,7 +536,7 @@ func (fm *form) view() string {
 			}
 			if focused {
 				b.WriteString(dimStyle.Render(" (tab complete, up/down move, enter select)"))
-				writePickerMatches(&b, f)
+				writePickerMatches(&b, f, fm.width)
 			}
 		case kindModelPicker:
 			b.WriteString(f.input.View())
@@ -515,20 +548,20 @@ func (fm *form) view() string {
 			if focused {
 				b.WriteString("\n    ")
 				b.WriteString(dimStyle.Render("type to search, up/down move, enter confirm"))
-				writeModelMatches(&b, f)
+				writeModelMatches(&b, f, fm.width)
 			}
 		}
 
 		if f.help != "" {
 			b.WriteString("\n    ")
-			b.WriteString(dimStyle.Render(f.help))
+			b.WriteString(dimStyle.Width(matchWidth(fm.width)).Render(f.help))
 		}
 
 		b.WriteString("\n\n")
 	}
 
 	if fm.errMsg != "" {
-		b.WriteString(errStyle.Render("error: " + fm.errMsg))
+		b.WriteString(errStyle.Width(fm.width).Render("error: " + fm.errMsg))
 		b.WriteString("\n\n")
 	}
 
