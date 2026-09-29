@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/scroll"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 )
 
@@ -25,10 +26,12 @@ type item struct {
 }
 
 type Model struct {
-	cursor int
-	width  int
-	status string
-	err    error
+	cursor   int
+	width    int
+	height   int
+	scroller scroll.Model
+	status   string
+	err      error
 }
 
 type openResultMsg struct {
@@ -83,7 +86,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
+		m.width, m.height = msg.Width, msg.Height
+		m.scroller.Resize(m.width, m.height)
 
 		return m, nil
 	case openResultMsg:
@@ -96,13 +100,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 	case tea.KeyMsg:
+		if m.scroller.HandleKey(msg.String(), m.content) {
+			return m, nil
+		}
+
 		return m.handleKey(msg)
 	}
 
 	return m, nil
 }
 
-func (m Model) View() string {
+func (m Model) content() string {
 	var b strings.Builder
 
 	b.WriteString(theme.Wrap(m.width, headerStyle.Render("Pi Agent Lab")))
@@ -136,7 +144,11 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(helpStyle.Width(m.width).Render("j/k move  enter open  q quit"))
+	b.WriteString(helpStyle.Width(m.width).Render("j/k move  enter open  q quit  ctrl+u/ctrl+d scroll"))
 
 	return b.String()
+}
+
+func (m Model) View() string {
+	return m.scroller.Render(m.content())
 }

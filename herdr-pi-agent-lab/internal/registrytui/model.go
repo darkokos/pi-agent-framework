@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/runflow"
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/scroll"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
@@ -79,9 +80,10 @@ type Model struct {
 	confirmAction func() error
 	confirmTarget confirmTarget
 
-	flow   *runflow.Flow
-	width  int
-	height int
+	flow     *runflow.Flow
+	width    int
+	height   int
+	scroller scroll.Model
 
 	err      error
 	status   string
@@ -530,13 +532,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.scroller.Resize(m.width, m.height)
 		if m.form != nil {
 			m.form.setWidth(m.width)
 		}
 
 		return m, nil
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		if m.scroller.HandleKey(msg.String(), m.content) {
+			return m, nil
+		}
+
+		prevScreen := m.screen
+
+		newModel, cmd := m.handleKey(msg)
+		if nm, ok := newModel.(Model); ok {
+			if nm.screen != prevScreen {
+				nm.scroller.GotoTop()
+			}
+
+			return nm, cmd
+		}
+
+		return newModel, cmd
 	}
 
 	return m, nil
@@ -721,7 +739,7 @@ func (m Model) viewList(b *strings.Builder) {
 	}
 }
 
-func (m Model) View() string {
+func (m Model) content() string {
 	var b strings.Builder
 
 	header := headerStyle.Render("Pi Agent Lab — Agents & Tasks")
@@ -796,7 +814,15 @@ func (m Model) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Width(m.width).Render(m.helpText()))
+	b.WriteString(helpStyle.Width(m.width).Render(m.helpText() + "  ctrl+u/ctrl+d scroll"))
 
 	return b.String()
+}
+
+func (m Model) View() string {
+	if m.screen == screenRun {
+		return m.content()
+	}
+
+	return m.scroller.Render(m.content())
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/execconfirm"
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/scroll"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 	"github.com/darkokos/pi-agent-framework/pi-agent-compare"
 	invoke "github.com/darkokos/pi-agent-framework/pi-agent-invoke"
@@ -47,6 +48,7 @@ type Model struct {
 	status    string
 	width     int
 	height    int
+	scroller  scroll.Model
 }
 
 func NewModel() Model {
@@ -140,6 +142,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resume = &c
 		}
 
+		m.scroller.Resize(m.width, m.height)
 		m.overrideInput.Width = max(m.width-10, 10)
 
 		return m, nil
@@ -156,7 +159,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, loadData(m.overrideRoot)
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		if m.view != viewResumeConfirm && m.scroller.HandleKey(msg.String(), m.content) {
+			return m, nil
+		}
+
+		prevView := m.view
+
+		newModel, cmd := m.handleKey(msg)
+		if nm, ok := newModel.(Model); ok {
+			if nm.view != prevView {
+				nm.scroller.GotoTop()
+			}
+
+			return nm, cmd
+		}
+
+		return newModel, cmd
 	}
 
 	return m, nil
@@ -386,7 +404,7 @@ func (m Model) viewDetail(b *strings.Builder) {
 	}
 }
 
-func (m Model) View() string {
+func (m Model) content() string {
 	var b strings.Builder
 
 	header := headerStyle.Render("Pi Agent Lab — Review Runs")
@@ -448,10 +466,18 @@ func (m Model) View() string {
 
 	b.WriteString("\n")
 	if m.view == viewDetail {
-		b.WriteString(helpStyle.Width(m.width).Render("j/k select unrated run  r resume it to rate  esc back  q quit"))
+		b.WriteString(helpStyle.Width(m.width).Render("j/k select unrated run  r resume it to rate  esc back  q quit  ctrl+u/ctrl+d scroll"))
 	} else {
-		b.WriteString(helpStyle.Width(m.width).Render("j/k move  enter open  o override registry  q quit"))
+		b.WriteString(helpStyle.Width(m.width).Render("j/k move  enter open  o override registry  q quit  ctrl+u/ctrl+d scroll"))
 	}
 
 	return b.String()
+}
+
+func (m Model) View() string {
+	if m.view == viewResumeConfirm {
+		return m.content()
+	}
+
+	return m.scroller.Render(m.content())
 }

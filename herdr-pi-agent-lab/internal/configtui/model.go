@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/scroll"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
@@ -38,6 +39,8 @@ type Model struct {
 	pendingDefault string
 	input          textinput.Model
 	width          int
+	height         int
+	scroller       scroll.Model
 	err            error
 	status         string
 	loading        bool
@@ -154,12 +157,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
+		m.width, m.height = msg.Width, msg.Height
+		m.scroller.Resize(m.width, m.height)
 		m.input.Width = max(m.width-10, 10)
 
 		return m, nil
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		if m.scroller.HandleKey(msg.String(), m.content) {
+			return m, nil
+		}
+
+		prevScreen := m.screen
+
+		newModel, cmd := m.handleKey(msg)
+		if nm, ok := newModel.(Model); ok {
+			if nm.screen != prevScreen {
+				nm.scroller.GotoTop()
+			}
+
+			return nm, cmd
+		}
+
+		return newModel, cmd
 	}
 
 	return m, nil
@@ -207,7 +226,7 @@ func (m Model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) View() string {
+func (m Model) content() string {
 	var b strings.Builder
 
 	b.WriteString(theme.Wrap(m.width, headerStyle.Render("Pi Agent Lab — Config")))
@@ -266,7 +285,11 @@ func (m Model) View() string {
 	b.WriteString("Registry Directory:\n")
 	b.WriteString(theme.Wrap(m.width, m.root))
 	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Width(m.width).Render("e edit  d use the default location  q quit"))
+	b.WriteString(helpStyle.Width(m.width).Render("e edit  d use the default location  q quit  ctrl+u/ctrl+d scroll"))
 
 	return b.String()
+}
+
+func (m Model) View() string {
+	return m.scroller.Render(m.content())
 }
