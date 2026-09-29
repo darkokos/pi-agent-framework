@@ -159,8 +159,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, loadData(m.overrideRoot)
 	case tea.KeyMsg:
-		if m.view != viewResumeConfirm && m.scroller.HandleKey(msg.String(), m.content) {
-			return m, nil
+		if m.view != viewResumeConfirm {
+			header, body, footer := m.parts()
+			if m.scroller.HandleKey(msg.String(), func() string { return header }, func() string { return body }, func() string { return footer }) {
+				return m, nil
+			}
 		}
 
 		prevView := m.view
@@ -297,7 +300,6 @@ var (
 	selectedStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
 	dimStyle       = theme.Dim
 	errStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	helpStyle      = theme.Help
 	okStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	resultStyle    = theme.Result
 	attentionStyle = theme.Attention
@@ -404,10 +406,8 @@ func (m Model) viewDetail(b *strings.Builder) {
 	}
 }
 
-func (m Model) content() string {
-	var b strings.Builder
-
-	header := headerStyle.Render("Pi Agent Lab — Review Runs")
+func (m Model) parts() (header, body, footer string) {
+	header = headerStyle.Render("Pi Agent Lab — Review Runs")
 	if m.resolvedRoot != "" {
 		suffix := ""
 		if m.overrideRoot != nil {
@@ -417,8 +417,7 @@ func (m Model) content() string {
 		header += dimStyle.Render(" - " + m.resolvedRoot + suffix)
 	}
 
-	b.WriteString(theme.Wrap(m.width, header))
-	b.WriteString("\n\n")
+	var b strings.Builder
 
 	if m.err != nil {
 		b.WriteString(errStyle.Width(m.width).Render(fmt.Sprintf("error: %v", m.err)))
@@ -428,16 +427,14 @@ func (m Model) content() string {
 	if m.view == viewResumeConfirm {
 		b.WriteString(m.resume.View())
 
-		return b.String()
+		return header, b.String(), ""
 	}
 
 	if m.view == viewOverridePrompt {
 		b.WriteString("Registry path (empty clears override):\n")
 		b.WriteString(m.overrideInput.View())
-		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Width(m.width).Render("enter confirm  esc cancel"))
 
-		return b.String()
+		return header, b.String(), "enter confirm  esc cancel"
 	}
 
 	if m.status != "" {
@@ -446,15 +443,13 @@ func (m Model) content() string {
 	}
 
 	if m.resolvedRoot == "" && m.err != nil && m.overrideRoot == nil {
-		b.WriteString(helpStyle.Width(m.width).Render("o use a registry for this session  q quit"))
-
-		return b.String()
+		return header, b.String(), "o use a registry for this session  q quit"
 	}
 
 	if m.loading && len(m.rows) == 0 {
 		b.WriteString("loading...\n")
 
-		return b.String()
+		return header, b.String(), ""
 	}
 
 	switch m.view {
@@ -464,20 +459,24 @@ func (m Model) content() string {
 		m.viewList(&b)
 	}
 
-	b.WriteString("\n")
 	if m.view == viewDetail {
-		b.WriteString(helpStyle.Width(m.width).Render("j/k select unrated run  r resume it to rate  esc back  q quit  ctrl+u/ctrl+d scroll"))
+		footer = "j/k select unrated run  r resume it to rate  esc back  q quit  ctrl+u/ctrl+d scroll"
 	} else {
-		b.WriteString(helpStyle.Width(m.width).Render("j/k move  enter open  o override registry  q quit  ctrl+u/ctrl+d scroll"))
+		footer = "j/k move  enter open  o override registry  q quit  ctrl+u/ctrl+d scroll"
 	}
 
-	return b.String()
+	return header, b.String(), footer
 }
 
 func (m Model) View() string {
+	header, body, footer := m.parts()
+
 	if m.view == viewResumeConfirm {
-		return m.content()
+		return theme.Wrap(m.width, header) + "\n\n" + body
+	}
+	if footer == "" {
+		return m.scroller.Render(header, body)
 	}
 
-	return m.scroller.Render(m.content())
+	return m.scroller.RenderWithFooter(header, body, footer)
 }

@@ -285,7 +285,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 	case tea.KeyMsg:
-		if m.scroller.HandleKey(msg.String(), m.content) {
+		header, body, footer := m.parts()
+		if m.scroller.HandleKey(msg.String(), func() string { return header }, func() string { return body }, func() string { return footer }) {
 			return m, nil
 		}
 
@@ -359,21 +360,18 @@ func (m Model) helpText() string {
 	}
 }
 
-func (m Model) content() string {
-	var b strings.Builder
-
-	header := headerStyle.Render("Pi Agent Lab — Start a run")
+func (m Model) parts() (header, body, footer string) {
+	header = headerStyle.Render("Pi Agent Lab — Start a run")
 	if m.root != "" {
 		header += dimStyle.Render(" - " + m.root)
 	}
 
-	b.WriteString(theme.Wrap(m.width, header))
-	b.WriteString("\n\n")
+	var b strings.Builder
 
 	if m.screen == screenRun && m.flow.Confirming() {
 		b.WriteString(m.flow.View())
 
-		return b.String()
+		return header, b.String(), ""
 	}
 
 	if m.err != nil {
@@ -386,21 +384,19 @@ func (m Model) content() string {
 	}
 
 	if m.root == "" && m.err != nil {
-		b.WriteString(helpStyle.Width(m.width).Render("q quit"))
-
-		return b.String()
+		return header, b.String(), "q quit"
 	}
 
 	if m.loading && len(m.agents) == 0 {
 		b.WriteString("loading...\n")
 
-		return b.String()
+		return header, b.String(), ""
 	}
 
 	if m.screen == screenRun {
 		b.WriteString(m.flow.View())
 
-		return b.String()
+		return header, b.String(), ""
 	}
 
 	switch m.screen {
@@ -410,16 +406,18 @@ func (m Model) content() string {
 		m.viewAgent(&b)
 	}
 
-	b.WriteString("\n")
-	b.WriteString(helpStyle.Width(m.width).Render(m.helpText() + "  ctrl+u/ctrl+d scroll"))
-
-	return b.String()
+	return header, b.String(), m.helpText() + "  ctrl+u/ctrl+d scroll"
 }
 
 func (m Model) View() string {
+	header, body, footer := m.parts()
+
 	if m.screen == screenRun {
-		return m.content()
+		return theme.Wrap(m.width, header) + "\n\n" + body
+	}
+	if footer == "" {
+		return m.scroller.Render(header, body)
 	}
 
-	return m.scroller.Render(m.content())
+	return m.scroller.RenderWithFooter(header, body, footer)
 }

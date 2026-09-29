@@ -163,7 +163,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 	case tea.KeyMsg:
-		if m.scroller.HandleKey(msg.String(), m.content) {
+		header, body, footer := m.parts()
+		if m.scroller.HandleKey(msg.String(), func() string { return header }, func() string { return body }, func() string { return footer }) {
 			return m, nil
 		}
 
@@ -226,16 +227,15 @@ func (m Model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) content() string {
-	var b strings.Builder
+func (m Model) parts() (header, body, footer string) {
+	header = headerStyle.Render("Pi Agent Lab — Config")
 
-	b.WriteString(theme.Wrap(m.width, headerStyle.Render("Pi Agent Lab — Config")))
-	b.WriteString("\n\n")
+	var b strings.Builder
 
 	if m.loading {
 		b.WriteString("loading...\n")
 
-		return b.String()
+		return header, b.String(), ""
 	}
 
 	if m.err != nil {
@@ -252,19 +252,15 @@ func (m Model) content() string {
 		b.WriteString(m.input.View())
 		b.WriteString("\n\n")
 		b.WriteString(dimStyle.Width(m.width).Render("persisted to ~/.config/pi-agent-lab/config.json"))
-		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Width(m.width).Render("ctrl+w save  esc cancel"))
 
-		return b.String()
+		return header, b.String(), "ctrl+w save  esc cancel"
 	}
 
 	if m.screen == screenConfirmDefault {
 		b.WriteString("Set registry directory to the default location?\n\n")
 		b.WriteString(theme.Wrap(m.width, m.pendingDefault))
-		b.WriteString("\n\n")
-		b.WriteString(helpStyle.Width(m.width).Render("y confirm  n/esc cancel"))
 
-		return b.String()
+		return header, b.String(), "y confirm  n/esc cancel"
 	}
 
 	if m.root == "" {
@@ -276,20 +272,20 @@ func (m Model) content() string {
 			b.WriteString("\n")
 		}
 
-		b.WriteString("\n")
-		b.WriteString(helpStyle.Width(m.width).Render("e choose a directory  d use the suggested location  q quit"))
-
-		return b.String()
+		return header, b.String(), "e choose a directory  d use the suggested location  q quit"
 	}
 
 	b.WriteString("Registry Directory:\n")
 	b.WriteString(theme.Wrap(m.width, m.root))
-	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Width(m.width).Render("e edit  d use the default location  q quit  ctrl+u/ctrl+d scroll"))
 
-	return b.String()
+	return header, b.String(), "e edit  d use the default location  q quit  ctrl+u/ctrl+d scroll"
 }
 
 func (m Model) View() string {
-	return m.scroller.Render(m.content())
+	header, body, footer := m.parts()
+	if footer == "" {
+		return m.scroller.Render(header, body)
+	}
+
+	return m.scroller.RenderWithFooter(header, body, footer)
 }

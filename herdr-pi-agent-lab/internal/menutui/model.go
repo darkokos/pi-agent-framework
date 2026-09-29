@@ -100,7 +100,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 	case tea.KeyMsg:
-		if m.scroller.HandleKey(msg.String(), m.content) {
+		header, body, footer := m.parts()
+		if m.scroller.HandleKey(msg.String(), func() string { return header }, func() string { return body }, func() string { return footer }) {
 			return m, nil
 		}
 
@@ -110,11 +111,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) content() string {
-	var b strings.Builder
+func (m Model) parts() (header, body, footer string) {
+	header = headerStyle.Render("Pi Agent Lab")
 
-	b.WriteString(theme.Wrap(m.width, headerStyle.Render("Pi Agent Lab")))
-	b.WriteString("\n\n")
+	var b strings.Builder
 
 	for i, it := range items {
 		if i == m.cursor {
@@ -133,8 +133,6 @@ func (m Model) content() string {
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString("\n")
-
 	if m.err != nil {
 		b.WriteString(errStyle.Width(m.width).Render("error: " + m.err.Error()))
 		b.WriteString("\n\n")
@@ -144,11 +142,11 @@ func (m Model) content() string {
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(helpStyle.Width(m.width).Render("j/k move  enter open  q quit  ctrl+u/ctrl+d scroll"))
-
-	return b.String()
+	return header, b.String(), "j/k move  enter open  q quit  ctrl+u/ctrl+d scroll"
 }
 
 func (m Model) View() string {
-	return m.scroller.Render(m.content())
+	header, body, footer := m.parts()
+
+	return m.scroller.RenderWithFooter(header, body, footer)
 }
