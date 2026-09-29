@@ -17,22 +17,27 @@ type ToolsConfig struct {
 	Names []string `json:"names,omitempty"`
 }
 
-type ResourceIsolation struct {
+type ExtensionsConfig struct {
 	Isolate bool     `json:"isolate"`
-	Paths   []string `json:"paths,omitempty"`
+	Sources []string `json:"sources,omitempty"`
+}
+
+type SkillsConfig struct {
+	Isolate bool     `json:"isolate"`
+	Names   []string `json:"names,omitempty"`
 }
 
 type AgentVersion struct {
-	AgentID      string            `json:"agentId"`
-	VersionID    string            `json:"versionId"`
-	Model        string            `json:"model"`
-	Provider     string            `json:"provider,omitempty"`
-	Thinking     string            `json:"thinking,omitempty"`
-	SystemPrompt SystemPromptRef   `json:"systemPrompt"`
-	Tools        ToolsConfig       `json:"tools"`
-	Extensions   ResourceIsolation `json:"extensions"`
-	Skills       ResourceIsolation `json:"skills"`
-	Notes        string            `json:"notes,omitempty"`
+	AgentID      string           `json:"agentId"`
+	VersionID    string           `json:"versionId"`
+	Model        string           `json:"model"`
+	Provider     string           `json:"provider,omitempty"`
+	Thinking     string           `json:"thinking,omitempty"`
+	SystemPrompt SystemPromptRef  `json:"systemPrompt"`
+	Tools        ToolsConfig      `json:"tools"`
+	Extensions   ExtensionsConfig `json:"extensions"`
+	Skills       SkillsConfig     `json:"skills"`
+	Notes        string           `json:"notes,omitempty"`
 }
 
 type Task struct {

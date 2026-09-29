@@ -93,7 +93,7 @@ func (f Flow) invocation(it item) (string, error) {
 		return "", err
 	}
 
-	return invoke.BuildInvocation(it.agentID, it.versionID, it.taskID, systemPrompt, registry.TaskPromptPath(f.root, it.taskID), version)
+	return invoke.BuildInvocation(f.root, it.agentID, it.versionID, it.taskID, systemPrompt, registry.TaskPromptPath(f.root, it.taskID), version)
 }
 
 func (f Flow) Update(msg tea.Msg) (Flow, tea.Cmd, Outcome) {

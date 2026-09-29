@@ -2,7 +2,6 @@ package validate
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -132,67 +131,15 @@ func ModelsForID(entries []ModelEntry, id string) []ModelEntry {
 	return out
 }
 
-func packageDeclaresExtensions(dir string) bool {
-	data, err := os.ReadFile(filepath.Join(dir, "package.json"))
-	if err != nil {
-		return false
-	}
-
-	var pkg struct {
-		Pi struct {
-			Extensions json.RawMessage `json:"extensions"`
-		} `json:"pi"`
-	}
-	if err := json.Unmarshal(data, &pkg); err != nil {
-		return false
-	}
-
-	return len(pkg.Pi.Extensions) > 0
-}
-
-func packageHasExtensionsDir(dir string) bool {
-	entries, err := os.ReadDir(filepath.Join(dir, "extensions"))
-	if err != nil {
-		return false
-	}
-
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() {
-			for _, index := range []string{"index.ts", "index.js"} {
-				if _, err := os.Stat(filepath.Join(dir, "extensions", name, index)); err == nil {
-					return true
-				}
-			}
-
-			continue
-		}
-
-		if strings.HasSuffix(name, ".ts") || strings.HasSuffix(name, ".js") {
-			return true
+func NonBuiltinTools(names []string) []string {
+	var out []string
+	for _, n := range names {
+		if !slices.Contains(BuiltinTools, n) {
+			out = append(out, n)
 		}
 	}
 
-	return false
-}
-
-func ExtensionPath(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-
-	if !info.IsDir() {
-		return strings.HasSuffix(path, ".ts") || strings.HasSuffix(path, ".js")
-	}
-
-	for _, name := range []string{"index.ts", "index.js"} {
-		if _, err := os.Stat(filepath.Join(path, name)); err == nil {
-			return true
-		}
-	}
-
-	return packageDeclaresExtensions(path) || packageHasExtensionsDir(path)
+	return out
 }
 
 func SkillPath(path string) bool {
@@ -231,15 +178,6 @@ func hasSkillFrontmatter(path string) bool {
 	return strings.Contains(frontmatter, "name:") && strings.Contains(frontmatter, "description:")
 }
 
-func GlobalExtensionsDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(home, ".pi", "agent", "extensions"), nil
-}
-
 func GlobalSkillsDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -247,32 +185,4 @@ func GlobalSkillsDir() (string, error) {
 	}
 
 	return filepath.Join(home, ".pi", "agent", "skills"), nil
-}
-
-func SettingsAbsolutePackagePaths() []string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-
-	data, err := os.ReadFile(filepath.Join(home, ".pi", "agent", "settings.json"))
-	if err != nil {
-		return nil
-	}
-
-	var settings struct {
-		Packages []string `json:"packages"`
-	}
-	if json.Unmarshal(data, &settings) != nil {
-		return nil
-	}
-
-	var out []string
-	for _, pkg := range settings.Packages {
-		if filepath.IsAbs(pkg) {
-			out = append(out, pkg)
-		}
-	}
-
-	return out
 }

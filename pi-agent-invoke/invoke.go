@@ -2,6 +2,8 @@ package invoke
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
@@ -11,7 +13,38 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-func BuildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath string, version *registry.AgentVersion) (string, error) {
+func isPackageSource(s string) bool {
+	for _, prefix := range []string{"npm:", "git:", "https://", "http://", "ssh://", "git@"} {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func resolveExtensionPath(root, source string) string {
+	switch {
+	case source == "~":
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
+
+		return source
+	case strings.HasPrefix(source, "~/"):
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, source[2:])
+		}
+
+		return source
+	case filepath.IsAbs(source):
+		return source
+	default:
+		return filepath.Join(root, source)
+	}
+}
+
+func BuildInvocation(root, agentID, versionID, taskID, systemPrompt, taskPromptPath string, version *registry.AgentVersion) (string, error) {
 	parts := []string{
 		`id=$(uuidgen) &&`,
 		"PI_AGENT_VERSION=" + shellQuote(agentID+"@"+versionID),
@@ -45,15 +78,19 @@ func BuildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath st
 	if version.Extensions.Isolate {
 		parts = append(parts, "--no-extensions")
 	}
-	for _, p := range version.Extensions.Paths {
-		parts = append(parts, "-e", shellQuote(p))
+	for _, source := range version.Extensions.Sources {
+		if !isPackageSource(source) {
+			source = resolveExtensionPath(root, source)
+		}
+
+		parts = append(parts, "-e", shellQuote(source))
 	}
 
 	if version.Skills.Isolate {
 		parts = append(parts, "--no-skills")
 	}
-	for _, p := range version.Skills.Paths {
-		parts = append(parts, "--skill", shellQuote(p))
+	for _, name := range version.Skills.Names {
+		parts = append(parts, "--skill", shellQuote(filepath.Join(registry.VersionSkillsDir(root, agentID, versionID), name)))
 	}
 
 	systemPromptFlag := "--system-prompt"

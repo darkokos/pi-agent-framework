@@ -39,6 +39,7 @@ type formField struct {
 	pickerMatches []string
 	pickerCursor  int
 	appendMode    bool
+	pathBase      string
 
 	modelOptions []validate.ModelEntry
 	modelMatches []validate.ModelEntry
@@ -54,6 +55,8 @@ type form struct {
 	fields   []*formField
 	focus    int
 	errMsg   string
+	notices  []string
+	warnings []string
 	onSubmit func(f *form) error
 }
 
@@ -83,15 +86,31 @@ func newBoolField(label, help string, current bool) *formField {
 
 func (f *formField) refilterPicker() {
 	full := f.text()
-	query := strings.ToLower(full)
+
+	already, rawQuery := "", full
+	if f.appendMode {
+		if idx := strings.LastIndex(full, ","); idx >= 0 {
+			already, rawQuery = full[:idx], full[idx+1:]
+		}
+
+		rawQuery = strings.TrimSpace(rawQuery)
+	}
+
+	if f.pathBase != "" {
+		if matches := registryPathMatches(f.pathBase, rawQuery); matches != nil {
+			f.pickerMatches = matches
+			if f.pickerCursor >= len(f.pickerMatches) {
+				f.pickerCursor = 0
+			}
+
+			return
+		}
+	}
+
+	query := strings.ToLower(rawQuery)
 
 	used := map[string]bool{}
 	if f.appendMode {
-		already := ""
-		if idx := strings.LastIndex(full, ","); idx >= 0 {
-			already, query = full[:idx], strings.TrimSpace(strings.ToLower(full[idx+1:]))
-		}
-
 		for u := range strings.SplitSeq(already, ",") {
 			if u = strings.TrimSpace(u); u != "" {
 				used[strings.ToLower(u)] = true

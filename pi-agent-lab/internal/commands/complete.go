@@ -78,28 +78,79 @@ func completeModels(_ *cobra.Command, _ []string, _ string) ([]string, cobra.She
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
-func completeExtensionPaths(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+func completeExtensionSources(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if strings.HasPrefix(toComplete, ".") {
+		return completeRegistryRelativePath(toComplete), cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
+	}
+
 	var out []string
 
-	if dir, err := validate.GlobalExtensionsDir(); err == nil {
-		entries, err := os.ReadDir(dir)
-		if err == nil {
-			for _, e := range entries {
-				p := filepath.Join(dir, e.Name())
-				if validate.ExtensionPath(p) {
-					out = append(out, p)
-				}
-			}
+	for _, source := range validate.InstalledExtensionSources() {
+		if strings.HasPrefix(source, toComplete) {
+			out = append(out, source)
 		}
 	}
 
-	for _, p := range validate.SettingsAbsolutePackagePaths() {
-		if validate.ExtensionPath(p) {
-			out = append(out, p)
-		}
+	hint := "or start with ./ or ../ to complete a path relative to the registry directory (the one from `pi-agent-lab config show`)"
+	if root, err := registry.ResolveRoot(); err == nil {
+		hint = "or start with ./ or ../ to complete a path relative to the registry directory (" + root + ")"
 	}
 
-	return out, cobra.ShellCompDirectiveDefault
+	out = cobra.AppendActiveHelp(out, hint)
+
+	return out, cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeRegistryRelativePath(toComplete string) []string {
+	switch toComplete {
+	case ".":
+		return []string{"./", "../"}
+	case "..":
+		return []string{"../"}
+	}
+
+	root, err := registry.ResolveRoot()
+	if err != nil {
+		return nil
+	}
+
+	dir := toComplete[:strings.LastIndex(toComplete, "/")+1]
+	base := toComplete[len(dir):]
+
+	entries, err := os.ReadDir(filepath.Join(root, dir))
+	if err != nil {
+		return nil
+	}
+
+	var out []string
+
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, base) || (strings.HasPrefix(name, ".") && !strings.HasPrefix(base, ".")) {
+			continue
+		}
+
+		if isDir, _ := entryIsDir(filepath.Join(root, dir), e); isDir {
+			name += "/"
+		}
+
+		out = append(out, dir+name)
+	}
+
+	return out
+}
+
+func entryIsDir(parent string, e os.DirEntry) (bool, error) {
+	if e.IsDir() {
+		return true, nil
+	}
+
+	info, err := os.Stat(filepath.Join(parent, e.Name()))
+	if err != nil {
+		return false, err
+	}
+
+	return info.IsDir(), nil
 }
 
 func completeSkillPaths(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {

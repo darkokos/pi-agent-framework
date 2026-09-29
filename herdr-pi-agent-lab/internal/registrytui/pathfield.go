@@ -76,6 +76,49 @@ func pathMatches(text string) []string {
 	return append(dirs, files...)
 }
 
+func registryPathMatches(root, query string) []string {
+	switch query {
+	case ".":
+		return []string{"./", "../"}
+	case "..":
+		return []string{"../"}
+	}
+
+	if !strings.HasPrefix(query, "./") && !strings.HasPrefix(query, "../") {
+		return nil
+	}
+
+	dir, base := splitPath(query)
+
+	entries, err := os.ReadDir(filepath.Join(root, dir))
+	if err != nil {
+		return []string{}
+	}
+
+	var dirs, files []string
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, base) || (strings.HasPrefix(name, ".") && !strings.HasPrefix(base, ".")) {
+			continue
+		}
+
+		isDir := e.IsDir()
+		if e.Type()&os.ModeSymlink != 0 {
+			if st, err := os.Stat(filepath.Join(root, dir, name)); err == nil && st.IsDir() {
+				isDir = true
+			}
+		}
+
+		if isDir {
+			dirs = append(dirs, dir+name+"/")
+		} else {
+			files = append(files, dir+name)
+		}
+	}
+
+	return append(dirs, files...)
+}
+
 func longestCommonPrefix(names []string) string {
 	if len(names) == 0 {
 		return ""

@@ -44,12 +44,13 @@ const (
 )
 
 var (
-	headerStyle   = lipgloss.NewStyle().Bold(true)
-	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	dimStyle      = theme.Dim
-	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	okStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	helpStyle     = theme.Help
+	headerStyle    = lipgloss.NewStyle().Bold(true)
+	selectedStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	dimStyle       = theme.Dim
+	errStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	okStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	helpStyle      = theme.Help
+	attentionStyle = theme.Attention
 )
 
 type Model struct {
@@ -80,9 +81,11 @@ type Model struct {
 	width  int
 	height int
 
-	err     error
-	status  string
-	loading bool
+	err      error
+	status   string
+	notices  []string
+	warnings []string
+	loading  bool
 }
 
 type tickMsg struct{}
@@ -171,7 +174,7 @@ func findTask(tasks []*registry.Task, id string) *registry.Task {
 }
 
 func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.status = ""
+	m.status, m.notices, m.warnings = "", nil, nil
 
 	switch msg.String() {
 	case "tab":
@@ -223,7 +226,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleAgentDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.status = ""
+	m.status, m.notices, m.warnings = "", nil, nil
 
 	switch msg.String() {
 	case "esc", "backspace":
@@ -271,7 +274,7 @@ func (m Model) handleAgentDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleVersionDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.status = ""
+	m.status, m.notices, m.warnings = "", nil, nil
 
 	switch msg.String() {
 	case "esc", "backspace":
@@ -292,7 +295,7 @@ func (m Model) handleVersionDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleTaskDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.status = ""
+	m.status, m.notices, m.warnings = "", nil, nil
 
 	switch msg.String() {
 	case "esc", "backspace":
@@ -381,8 +384,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if submitted {
 			m.screen = m.prevScreen
-			m.form = nil
 			m.status = "created"
+			m.notices, m.warnings = m.form.notices, m.form.warnings
+			m.form = nil
 
 			return m, loadData()
 		}
@@ -549,8 +553,8 @@ func (m Model) viewVersionDetail(b *strings.Builder) {
 	fmt.Fprintf(b, "Thinking:       %s\n", v.Thinking)
 	fmt.Fprintf(b, "System Prompt:  %s (%s)\n", v.SystemPrompt.File, v.SystemPrompt.Mode)
 	fmt.Fprintf(b, "Tools:          %s %s\n", v.Tools.Mode, strings.Join(v.Tools.Names, ","))
-	fmt.Fprintf(b, "Extensions:     isolate=%t %s\n", v.Extensions.Isolate, strings.Join(v.Extensions.Paths, ","))
-	fmt.Fprintf(b, "Skills:         isolate=%t %s\n", v.Skills.Isolate, strings.Join(v.Skills.Paths, ","))
+	fmt.Fprintf(b, "Extensions:     isolate=%t %s\n", v.Extensions.Isolate, strings.Join(v.Extensions.Sources, ","))
+	fmt.Fprintf(b, "Skills:         isolate=%t %s\n", v.Skills.Isolate, strings.Join(v.Skills.Names, ","))
 	fmt.Fprintf(b, "Notes:          %s\n", v.Notes)
 }
 
@@ -633,6 +637,17 @@ func (m Model) View() string {
 	if m.status != "" {
 		b.WriteString(okStyle.Render(m.status))
 		b.WriteString("\n\n")
+	}
+	for _, n := range m.notices {
+		b.WriteString(dimStyle.Render("note: " + n))
+		b.WriteString("\n")
+	}
+	for _, w := range m.warnings {
+		b.WriteString(attentionStyle.Render("warning: " + w))
+		b.WriteString("\n")
+	}
+	if len(m.notices) > 0 || len(m.warnings) > 0 {
+		b.WriteString("\n")
 	}
 
 	if m.root == "" && m.err != nil {

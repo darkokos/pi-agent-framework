@@ -26,6 +26,10 @@ func versionSystemPromptFile(root, agentID, versionID string) string {
 	return filepath.Join(versionsDir(root, agentID), versionID+".system.md")
 }
 
+func versionSkillsDir(root, agentID, versionID string) string {
+	return filepath.Join(versionsDir(root, agentID), versionID+".skills")
+}
+
 func taskFile(root, taskID string) string {
 	return filepath.Join(tasksDir(root), taskID+".json")
 }

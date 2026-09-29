@@ -97,8 +97,12 @@ type AgentVersionInput struct {
 	Thinking         string
 	Notes            string
 	Tools            ToolsConfig
-	Extensions       ResourceIsolation
-	Skills           ResourceIsolation
+
+	ExtensionsIsolate bool
+	ExtensionSources  []string
+
+	SkillsIsolate bool
+	SkillPaths    []string
 }
 
 func CreateAgentVersion(root, agentID, versionID string, in AgentVersionInput) (*AgentVersion, error) {
@@ -122,6 +126,15 @@ func CreateAgentVersion(root, agentID, versionID string, in AgentVersionInput) (
 		promptMode = "replace"
 	}
 
+	skillsDir := versionSkillsDir(root, agentID, versionID)
+
+	skillNames, err := copySkills(skillsDir, in.SkillPaths)
+	if err != nil {
+		_ = os.RemoveAll(skillsDir)
+
+		return nil, err
+	}
+
 	version := &AgentVersion{
 		AgentID:   agentID,
 		VersionID: versionID,
@@ -133,8 +146,8 @@ func CreateAgentVersion(root, agentID, versionID string, in AgentVersionInput) (
 			File: versionID + ".system.md",
 		},
 		Tools:      in.Tools,
-		Extensions: in.Extensions,
-		Skills:     in.Skills,
+		Extensions: ExtensionsConfig{Isolate: in.ExtensionsIsolate, Sources: in.ExtensionSources},
+		Skills:     SkillsConfig{Isolate: in.SkillsIsolate, Names: skillNames},
 		Notes:      in.Notes,
 	}
 
@@ -142,9 +155,13 @@ func CreateAgentVersion(root, agentID, versionID string, in AgentVersionInput) (
 		return nil, err
 	}
 	if err := os.WriteFile(versionSystemPromptFile(root, agentID, versionID), promptContent, 0o644); err != nil {
+		_ = os.RemoveAll(skillsDir)
+
 		return nil, err
 	}
 	if err := writeJSON(vFile, version); err != nil {
+		_ = os.RemoveAll(skillsDir)
+
 		return nil, err
 	}
 
@@ -207,6 +224,9 @@ func DeleteAgentVersion(root, agentID, versionID string) error {
 		return err
 	}
 	if err := os.Remove(versionSystemPromptFile(root, agentID, versionID)); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(versionSkillsDir(root, agentID, versionID)); err != nil {
 		return err
 	}
 

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -30,14 +31,66 @@ func requireValidSystemPromptMode(mode string) error {
 	return fmt.Errorf("--system-prompt-mode must be one of %s, got %q", strings.Join(validate.SystemPromptModes, "|"), mode)
 }
 
-func requireValidPaths(flag string, paths []string, valid func(string) bool) error {
-	for _, p := range paths {
-		if !valid(p) {
-			return fmt.Errorf("--%s %q is not a valid path", flag, p)
+func prepareResources(cmd *cobra.Command, toolsMode string, toolNames, extensionSources, skillPaths []string) ([]string, error) {
+	warn := func(format string, args ...any) {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: "+format+"\n", args...)
+	}
+	note := func(format string, args ...any) {
+		fmt.Fprintf(cmd.ErrOrStderr(), "note: "+format+"\n", args...)
+	}
+
+	for _, source := range extensionSources {
+		parsed, err := validate.ParseExtensionSource(source)
+		if err != nil {
+			return nil, fmt.Errorf("--extension: %w", err)
+		}
+
+		if !parsed.Pinned {
+			warn("extension %q is not pinned, so runs may change when the package is updated; pin it with an exact version (npm:name@1.2.3) or a git tag or commit (git:host/repo@ref)", source)
+		}
+		if !parsed.Portable {
+			warn("extension %q is a path tied to this machine; it will not resolve if the registry is moved or shared. Consider a path relative to the registry directory (e.g. ../my-extension) instead, or publish it as an npm:/git: package", source)
 		}
 	}
 
-	return nil
+	if toolsMode == "allowlist" || toolsMode == "denylist" {
+		for _, tool := range validate.NonBuiltinTools(toolNames) {
+			note("tool %q is not one of Pi's built-in tools; this is expected if an extension you're loading provides it, but Pi will silently ignore it otherwise", tool)
+		}
+	}
+
+	if len(skillPaths) > 0 && !canReadSkillFiles(toolsMode, toolNames) {
+		warn("skills are attached, but the tools mode leaves out both read and bash; Pi only lists skills to the model when one of them is available, so it will not see these skills")
+	}
+
+	skills := make([]string, 0, len(skillPaths))
+	for _, p := range skillPaths {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return nil, err
+		}
+
+		if !validate.SkillPath(abs) {
+			return nil, fmt.Errorf("--skill %q is not a skill: expected a folder containing SKILL.md, or a .md file with name and description frontmatter", p)
+		}
+
+		skills = append(skills, abs)
+	}
+
+	return skills, nil
+}
+
+func canReadSkillFiles(toolsMode string, toolNames []string) bool {
+	switch toolsMode {
+	case "none", "extensions-only":
+		return false
+	case "allowlist":
+		return slices.Contains(toolNames, "read") || slices.Contains(toolNames, "bash")
+	case "denylist":
+		return !slices.Contains(toolNames, "read") || !slices.Contains(toolNames, "bash")
+	default:
+		return true
+	}
 }
 
 func parseAgentVersionRef(s string) (agentID, versionID string, err error) {
@@ -62,7 +115,7 @@ func newCreateAgentCommand() *cobra.Command {
 		toolsMode         string
 		toolNames         []string
 		extensionsIsolate bool
-		extensionPaths    []string
+		extensionSources  []string
 		skillsIsolate     bool
 		skillPaths        []string
 	)
@@ -85,10 +138,8 @@ func newCreateAgentCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := requireValidPaths("extension", extensionPaths, validate.ExtensionPath); err != nil {
-				return err
-			}
-			if err := requireValidPaths("skill", skillPaths, validate.SkillPath); err != nil {
+			skills, err := prepareResources(cmd, toolsMode, toolNames, extensionSources, skillPaths)
+			if err != nil {
 				return err
 			}
 
@@ -113,14 +164,10 @@ func newCreateAgentCommand() *cobra.Command {
 					Mode:  toolsMode,
 					Names: toolNames,
 				},
-				Extensions: registry.ResourceIsolation{
-					Isolate: extensionsIsolate,
-					Paths:   extensionPaths,
-				},
-				Skills: registry.ResourceIsolation{
-					Isolate: skillsIsolate,
-					Paths:   skillPaths,
-				},
+				ExtensionsIsolate: extensionsIsolate,
+				ExtensionSources:  extensionSources,
+				SkillsIsolate:     skillsIsolate,
+				SkillPaths:        skills,
 			})
 			if err != nil {
 				_ = registry.DeleteAgent(root, agent.ID)
@@ -144,10 +191,10 @@ func newCreateAgentCommand() *cobra.Command {
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
 	cmd.Flags().StringVar(&toolsMode, "tools-mode", "all", "all|none|extensions-only|allowlist|denylist")
 	cmd.Flags().StringSliceVar(&toolNames, "tools", nil, "comma-separated tool names, used with --tools-mode allowlist|denylist")
-	cmd.Flags().BoolVar(&extensionsIsolate, "extensions-isolate", false, "disable automatically-discovered extensions; extensions given via --extension always load either way")
-	cmd.Flags().StringArrayVar(&extensionPaths, "extension", nil, "extension path to always load, repeatable")
-	cmd.Flags().BoolVar(&skillsIsolate, "skills-isolate", false, "disable automatically-discovered skills; skills given via --skill always load either way")
-	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "skill path to always load, repeatable")
+	cmd.Flags().BoolVar(&extensionsIsolate, "extensions-isolate", false, "don't load extensions from your Pi setup; the ones added with --extension still load")
+	cmd.Flags().StringArrayVar(&extensionSources, "extension", nil, "extension to load, repeatable: a package reference (npm:name@1.2.3 or git:host/repo@ref, pinned to a version), a path relative to the registry directory (see `pi-agent-lab config show`), or an absolute path (works only on this machine)")
+	cmd.Flags().BoolVar(&skillsIsolate, "skills-isolate", false, "don't load skills from your Pi setup; the skills added with --skill still load")
+	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "path to a skill folder or file, repeatable; it is copied into the registry so the version stays portable")
 	_ = cmd.MarkFlagRequired("initial-version-id")
 	_ = cmd.MarkFlagRequired("system-prompt-file")
 	_ = cmd.MarkFlagRequired("model")
@@ -158,7 +205,7 @@ func newCreateAgentCommand() *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("thinking", completeThinkingLevels)
 	_ = cmd.RegisterFlagCompletionFunc("tools-mode", completeToolsModes)
 	_ = cmd.RegisterFlagCompletionFunc("tools", completeToolsList)
-	_ = cmd.RegisterFlagCompletionFunc("extension", completeExtensionPaths)
+	_ = cmd.RegisterFlagCompletionFunc("extension", completeExtensionSources)
 	_ = cmd.RegisterFlagCompletionFunc("skill", completeSkillPaths)
 
 	return cmd
@@ -174,7 +221,7 @@ func newCreateAgentVersionCommand() *cobra.Command {
 		toolsMode         string
 		toolNames         []string
 		extensionsIsolate bool
-		extensionPaths    []string
+		extensionSources  []string
 		skillsIsolate     bool
 		skillPaths        []string
 	)
@@ -202,10 +249,8 @@ func newCreateAgentVersionCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := requireValidPaths("extension", extensionPaths, validate.ExtensionPath); err != nil {
-				return err
-			}
-			if err := requireValidPaths("skill", skillPaths, validate.SkillPath); err != nil {
+			skills, err := prepareResources(cmd, toolsMode, toolNames, extensionSources, skillPaths)
+			if err != nil {
 				return err
 			}
 
@@ -225,14 +270,10 @@ func newCreateAgentVersionCommand() *cobra.Command {
 					Mode:  toolsMode,
 					Names: toolNames,
 				},
-				Extensions: registry.ResourceIsolation{
-					Isolate: extensionsIsolate,
-					Paths:   extensionPaths,
-				},
-				Skills: registry.ResourceIsolation{
-					Isolate: skillsIsolate,
-					Paths:   skillPaths,
-				},
+				ExtensionsIsolate: extensionsIsolate,
+				ExtensionSources:  extensionSources,
+				SkillsIsolate:     skillsIsolate,
+				SkillPaths:        skills,
 			})
 			if err != nil {
 				return err
@@ -251,10 +292,10 @@ func newCreateAgentVersionCommand() *cobra.Command {
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this version")
 	cmd.Flags().StringVar(&toolsMode, "tools-mode", "all", "all|none|extensions-only|allowlist|denylist")
 	cmd.Flags().StringSliceVar(&toolNames, "tools", nil, "comma-separated tool names, used with --tools-mode allowlist|denylist")
-	cmd.Flags().BoolVar(&extensionsIsolate, "extensions-isolate", false, "disable automatically-discovered extensions; extensions given via --extension always load either way")
-	cmd.Flags().StringArrayVar(&extensionPaths, "extension", nil, "extension path to always load, repeatable")
-	cmd.Flags().BoolVar(&skillsIsolate, "skills-isolate", false, "disable automatically-discovered skills; skills given via --skill always load either way")
-	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "skill path to always load, repeatable")
+	cmd.Flags().BoolVar(&extensionsIsolate, "extensions-isolate", false, "don't load extensions from your Pi setup; the ones added with --extension still load")
+	cmd.Flags().StringArrayVar(&extensionSources, "extension", nil, "extension to load, repeatable: a package reference (npm:name@1.2.3 or git:host/repo@ref, pinned to a version), a path relative to the registry directory (see `pi-agent-lab config show`), or an absolute path (works only on this machine)")
+	cmd.Flags().BoolVar(&skillsIsolate, "skills-isolate", false, "don't load skills from your Pi setup; the skills added with --skill still load")
+	cmd.Flags().StringArrayVar(&skillPaths, "skill", nil, "path to a skill folder or file, repeatable; it is copied into the registry so the version stays portable")
 	_ = cmd.MarkFlagRequired("system-prompt-file")
 	_ = cmd.MarkFlagRequired("model")
 
@@ -264,7 +305,7 @@ func newCreateAgentVersionCommand() *cobra.Command {
 	_ = cmd.RegisterFlagCompletionFunc("thinking", completeThinkingLevels)
 	_ = cmd.RegisterFlagCompletionFunc("tools-mode", completeToolsModes)
 	_ = cmd.RegisterFlagCompletionFunc("tools", completeToolsList)
-	_ = cmd.RegisterFlagCompletionFunc("extension", completeExtensionPaths)
+	_ = cmd.RegisterFlagCompletionFunc("extension", completeExtensionSources)
 	_ = cmd.RegisterFlagCompletionFunc("skill", completeSkillPaths)
 
 	return cmd
@@ -395,8 +436,8 @@ func newShowAgentVersionCommand() *cobra.Command {
 			fmt.Fprintf(tw, "Thinking:\t%s\n", version.Thinking)
 			fmt.Fprintf(tw, "System Prompt:\t%s (%s)\n", version.SystemPrompt.File, version.SystemPrompt.Mode)
 			fmt.Fprintf(tw, "Tools:\t%s %s\n", version.Tools.Mode, strings.Join(version.Tools.Names, ", "))
-			fmt.Fprintf(tw, "Extensions:\t isolate=%t %s\n", version.Extensions.Isolate, strings.Join(version.Extensions.Paths, ", "))
-			fmt.Fprintf(tw, "Skills:\t isolate=%t %s\n", version.Skills.Isolate, strings.Join(version.Skills.Paths, ", "))
+			fmt.Fprintf(tw, "Extensions:\t isolate=%t %s\n", version.Extensions.Isolate, strings.Join(version.Extensions.Sources, ", "))
+			fmt.Fprintf(tw, "Skills:\t isolate=%t %s\n", version.Skills.Isolate, strings.Join(version.Skills.Names, ", "))
 			fmt.Fprintf(tw, "Notes:\t%s\n", version.Notes)
 
 			return tw.Flush()

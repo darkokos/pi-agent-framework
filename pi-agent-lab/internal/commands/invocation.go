@@ -68,7 +68,7 @@ func NewInvocationCommand() *cobra.Command {
 			}
 
 			taskPromptPath := registry.TaskPromptPath(root, taskID)
-			line, err := invoke.BuildInvocation(agentID, versionID, taskID, systemPrompt, taskPromptPath, version)
+			line, err := invoke.BuildInvocation(root, agentID, versionID, taskID, systemPrompt, taskPromptPath, version)
 			if err != nil {
 				return err
 			}

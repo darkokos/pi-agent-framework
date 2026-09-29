@@ -25,7 +25,7 @@ func TestBuildInvocation_SystemPromptMode(t *testing.T) {
 				Tools:        registry.ToolsConfig{Mode: "all"},
 			}
 
-			line, err := BuildInvocation("a", "1", "t", "the prompt", "/task.md", version)
+			line, err := BuildInvocation("/reg", "a", "1", "t", "the prompt", "/task.md", version)
 			if err != nil {
 				t.Fatal(err)
 			}
