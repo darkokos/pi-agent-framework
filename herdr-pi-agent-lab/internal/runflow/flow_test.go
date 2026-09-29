@@ -32,7 +32,7 @@ func seed(t *testing.T) (root string, agents []*registry.Agent) {
 		}
 	}
 
-	if _, err := registry.CreateTask(root, "the-task", src, ""); err != nil {
+	if _, err := registry.CreateTask(root, "the-task", "The Task", src, ""); err != nil {
 		t.Fatal(err)
 	}
 

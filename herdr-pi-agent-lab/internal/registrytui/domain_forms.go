@@ -127,6 +127,7 @@ func newAgentCreateForm(root string) *form {
 func newTaskCreateForm(root string) *form {
 	fields := []*formField{
 		newTextField("ID", "unique, immutable", "e.g. refactor-auth", ""),
+		newTextField("Name", "", "human-readable name", ""),
 		newPathField("Prompt File", "required; paths start from your home directory", "~/prompt.md", "~/"),
 		newTextField("Notes", "", "freeform notes", ""),
 	}
@@ -137,12 +138,12 @@ func newTaskCreateForm(root string) *form {
 			return fmt.Errorf("ID is required")
 		}
 
-		promptFile, err := requireFile(f.fields[1])
+		promptFile, err := requireFile(f.fields[2])
 		if err != nil {
 			return err
 		}
 
-		_, err = registry.CreateTask(root, id, promptFile, f.fields[2].text())
+		_, err = registry.CreateTask(root, id, f.fields[1].text(), promptFile, f.fields[3].text())
 
 		return err
 	})

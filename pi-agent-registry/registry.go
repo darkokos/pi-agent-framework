@@ -173,7 +173,7 @@ func CreateAgentVersion(root, agentID, versionID string, in AgentVersionInput) (
 	return version, nil
 }
 
-func CreateTask(root, id, promptFile, notes string) (*Task, error) {
+func CreateTask(root, id, name, promptFile, notes string) (*Task, error) {
 	file := taskFile(root, id)
 	if _, err := os.Stat(file); err == nil {
 		return nil, fmt.Errorf("task %q already exists", id)
@@ -186,6 +186,7 @@ func CreateTask(root, id, promptFile, notes string) (*Task, error) {
 
 	task := &Task{
 		ID:         id,
+		Name:       name,
 		PromptFile: id + ".prompt.md",
 		Notes:      notes,
 	}

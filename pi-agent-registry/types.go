@@ -42,6 +42,7 @@ type AgentVersion struct {
 
 type Task struct {
 	ID         string `json:"id"`
+	Name       string `json:"name,omitempty"`
 	PromptFile string `json:"promptFile"`
 	Notes      string `json:"notes,omitempty"`
 }

@@ -10,7 +10,7 @@ import (
 )
 
 func newCreateTaskCommand() *cobra.Command {
-	var promptFile, notes string
+	var name, promptFile, notes string
 
 	cmd := &cobra.Command{
 		Use:   "task <task-id>",
@@ -22,7 +22,7 @@ func newCreateTaskCommand() *cobra.Command {
 				return err
 			}
 
-			task, err := registry.CreateTask(root, args[0], promptFile, notes)
+			task, err := registry.CreateTask(root, args[0], name, promptFile, notes)
 			if err != nil {
 				return err
 			}
@@ -33,6 +33,7 @@ func newCreateTaskCommand() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&name, "name", "", "human-readable task name")
 	cmd.Flags().StringVar(&promptFile, "prompt-file", "", "path to the task prompt text (required)")
 	cmd.Flags().StringVar(&notes, "notes", "", "freeform notes about this task")
 	_ = cmd.MarkFlagRequired("prompt-file")
@@ -59,9 +60,9 @@ func newListTasksCommand() *cobra.Command {
 			}
 
 			tw := format.NewTabWriter(cmd.OutOrStdout())
-			fmt.Fprintln(tw, "ID\tPROMPT FILE\tNOTES")
+			fmt.Fprintln(tw, "ID\tNAME\tNOTES")
 			for _, task := range tasks {
-				fmt.Fprintf(tw, "%s\t%s\t%s\n", task.ID, task.PromptFile, task.Notes)
+				fmt.Fprintf(tw, "%s\t%s\t%s\n", task.ID, task.Name, task.Notes)
 			}
 
 			return tw.Flush()
@@ -90,6 +91,7 @@ func newShowTaskCommand() *cobra.Command {
 
 			tw := format.NewTabWriter(cmd.OutOrStdout())
 			fmt.Fprintf(tw, "ID:\t%s\n", task.ID)
+			fmt.Fprintf(tw, "Name:\t%s\n", task.Name)
 			fmt.Fprintf(tw, "Prompt File:\t%s\n", task.PromptFile)
 			fmt.Fprintf(tw, "Notes:\t%s\n", task.Notes)
 

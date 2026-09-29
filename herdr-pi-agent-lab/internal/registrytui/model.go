@@ -580,6 +580,7 @@ func (m Model) viewVersionDetail(b *strings.Builder) {
 func (m Model) viewTaskDetail(b *strings.Builder) {
 	t := m.selectedTask
 	m.writeField(b, "ID:           %s", t.ID)
+	m.writeField(b, "Name:         %s", t.Name)
 	m.writeField(b, "Prompt File:  %s", t.PromptFile)
 	m.writeField(b, "Notes:        %s", t.Notes)
 }
@@ -634,7 +635,7 @@ func (m Model) viewList(b *strings.Builder) {
 	}
 
 	for i, t := range m.tasks {
-		line := fmt.Sprintf("%s  %s", t.ID, t.PromptFile)
+		line := fmt.Sprintf("%s  %s", t.ID, t.Name)
 		writeRow(b, line, i == m.tasksCursor, m.width)
 	}
 }

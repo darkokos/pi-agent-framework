@@ -56,7 +56,7 @@ type Flow struct {
 func New(root, agentID, versionID string, tasks []*registry.Task, width, height int) Flow {
 	items := make([]item, 0, len(tasks))
 	for _, t := range tasks {
-		items = append(items, item{label: t.ID, detail: t.PromptFile, agentID: agentID, versionID: versionID, taskID: t.ID})
+		items = append(items, item{label: t.ID, detail: t.Name, agentID: agentID, versionID: versionID, taskID: t.ID})
 	}
 
 	return Flow{
