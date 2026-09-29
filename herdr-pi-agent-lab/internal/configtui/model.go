@@ -28,17 +28,19 @@ type screen int
 const (
 	screenView screen = iota
 	screenEdit
+	screenConfirmDefault
 )
 
 type Model struct {
-	screen    screen
-	root      string
-	suggested string
-	input     textinput.Model
-	width     int
-	err       error
-	status    string
-	loading   bool
+	screen         screen
+	root           string
+	suggested      string
+	pendingDefault string
+	input          textinput.Model
+	width          int
+	err            error
+	status         string
+	loading        bool
 }
 
 type dataMsg struct{ root string }
@@ -71,6 +73,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.screen == screenEdit {
 		return m.handleEditKey(msg)
 	}
+	if m.screen == screenConfirmDefault {
+		return m.handleConfirmDefaultKey(msg)
+	}
 
 	switch msg.String() {
 	case "ctrl+c", "q":
@@ -90,18 +95,40 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.input.Focus()
 	case "d":
 		dir, err := registry.SuggestedRegistryDir()
-		if err == nil {
-			err = registry.SetRegistryDir(dir)
-		}
 		if err != nil {
 			m.err = err
 
 			return m, nil
 		}
 
-		m.root = dir
+		m.pendingDefault = dir
+		m.status = ""
+		m.err = nil
+		m.screen = screenConfirmDefault
+	}
+
+	return m, nil
+}
+
+func (m Model) handleConfirmDefaultKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "enter":
+		if err := registry.SetRegistryDir(m.pendingDefault); err != nil {
+			m.err = err
+			m.pendingDefault = ""
+			m.screen = screenView
+
+			return m, nil
+		}
+
+		m.root = m.pendingDefault
+		m.pendingDefault = ""
 		m.status = "registry set to the default location"
 		m.err = nil
+		m.screen = screenView
+	case "n", "esc":
+		m.pendingDefault = ""
+		m.screen = screenView
 	}
 
 	return m, nil
@@ -208,6 +235,15 @@ func (m Model) View() string {
 		b.WriteString(dimStyle.Width(m.width).Render("persisted to ~/.config/pi-agent-lab/config.json"))
 		b.WriteString("\n\n")
 		b.WriteString(helpStyle.Width(m.width).Render("ctrl+w save  esc cancel"))
+
+		return b.String()
+	}
+
+	if m.screen == screenConfirmDefault {
+		b.WriteString("Set registry directory to the default location?\n\n")
+		b.WriteString(theme.Wrap(m.width, m.pendingDefault))
+		b.WriteString("\n\n")
+		b.WriteString(helpStyle.Width(m.width).Render("y confirm  n/esc cancel"))
 
 		return b.String()
 	}
