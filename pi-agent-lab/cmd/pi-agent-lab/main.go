@@ -20,7 +20,7 @@ func main() {
 	root.AddCommand(commands.NewShowCommand())
 	root.AddCommand(commands.NewDeleteCommand())
 	root.AddCommand(commands.NewInvocationCommand())
-	root.AddCommand(commands.NewConfigCommand())
+	root.AddCommand(commands.NewRegistryCommand())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

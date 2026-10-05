@@ -35,7 +35,7 @@ command = ["./bin/pi-agent-lab-registry-pane"]
 
 [[panes]]
 id = "config"
-title = "Pi Agent Lab — Config"
+title = "Pi Agent Lab — Registries"
 placement = "tab"
 command = ["./bin/pi-agent-lab-config-pane"]
 

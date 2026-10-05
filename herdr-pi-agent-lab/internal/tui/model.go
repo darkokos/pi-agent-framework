@@ -12,6 +12,7 @@ import (
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/execconfirm"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/scroll"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/tuistate"
 	"github.com/darkokos/pi-agent-framework/pi-agent-compare"
 	invoke "github.com/darkokos/pi-agent-framework/pi-agent-invoke"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
@@ -79,7 +80,7 @@ func loadData(overrideRoot *string) tea.Cmd {
 		if overrideRoot != nil {
 			root = *overrideRoot
 		} else {
-			resolved, err := registry.ResolveRoot()
+			resolved, err := tuistate.ActiveRoot()
 			if err != nil {
 				return errMsg{err}
 			}

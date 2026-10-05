@@ -5,50 +5,61 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/pathfield"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/scroll"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/tuistate"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
 var (
 	headerStyle    = lipgloss.NewStyle().Bold(true)
+	selectedStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
 	dimStyle       = theme.Dim
 	errStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	okStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	helpStyle      = theme.Help
 	attentionStyle = theme.Attention
 )
 
-type screen int
+type mode int
 
 const (
-	screenView screen = iota
-	screenEdit
-	screenConfirmDefault
+	modeList mode = iota
+	modeInit
+	modeAdd
 )
 
 type Model struct {
-	screen         screen
-	root           string
-	suggested      string
-	pendingDefault string
-	input          textinput.Model
-	width          int
-	height         int
-	scroller       scroll.Model
-	err            error
-	status         string
-	loading        bool
+	mode     mode
+	paths    []string
+	active   string
+	cursor   int
+	input    textinput.Model
+	matches  []string
+	width    int
+	height   int
+	scroller scroll.Model
+	status   string
+	err      error
+	loading  bool
 }
 
-type dataMsg struct{ root string }
+type listMsg struct {
+	paths  []string
+	active string
+	err    error
+}
 
-type errMsg struct{ err error }
+type doneMsg struct {
+	status string
+	err    error
+}
 
 func NewModel() Model {
 	ti := textinput.New()
@@ -57,81 +68,176 @@ func NewModel() Model {
 	return Model{loading: true, input: ti}
 }
 
-func loadRoot() tea.Cmd {
+func loadCmd() tea.Cmd {
 	return func() tea.Msg {
-		root, err := registry.ResolveRoot()
+		paths, err := registry.ListRegistered()
 		if err != nil {
-			return errMsg{err}
+			return listMsg{err: err}
 		}
 
-		return dataMsg{root: root}
+		active, err := tuistate.Load()
+
+		return listMsg{paths: paths, active: active, err: err}
+	}
+}
+
+func qualify(typed string) string {
+	if pathfield.IsExplicit(typed) {
+		return typed
+	}
+
+	return "~/" + typed
+}
+
+func expandPath(typed string) (string, error) {
+	return filepath.Abs(pathfield.Resolve(qualify(strings.TrimSpace(typed))))
+}
+
+func typedMatches(typed string) []string {
+	q := qualify(typed)
+	matches := pathfield.Matches(q, true)
+
+	if q == typed {
+		return matches
+	}
+
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		out = append(out, strings.TrimPrefix(m, "~/"))
+	}
+
+	return out
+}
+
+func (m *Model) refreshMatches() {
+	m.matches = typedMatches(m.input.Value())
+}
+
+func initCmd(p string) tea.Cmd {
+	return func() tea.Msg {
+		abs, err := expandPath(p)
+		if err != nil {
+			return doneMsg{err: err}
+		}
+
+		m, err := registry.InitAndRegister(abs, "", time.Now())
+		if err != nil {
+			return doneMsg{err: err}
+		}
+
+		return doneMsg{status: fmt.Sprintf("initialised %q at %s", m.Name, abs)}
+	}
+}
+
+func addCmd(p string) tea.Cmd {
+	return func() tea.Msg {
+		abs, err := expandPath(p)
+		if err != nil {
+			return doneMsg{err: err}
+		}
+
+		_, err = registry.Register(abs)
+		if errors.Is(err, registry.ErrAlreadyRegistered) {
+			return doneMsg{status: "already registered: " + abs}
+		}
+		if err != nil {
+			return doneMsg{err: err}
+		}
+
+		return doneMsg{status: "registered " + abs}
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return loadRoot()
+	return loadCmd()
+}
+
+func (m Model) handleInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.mode = modeList
+		m.err = nil
+
+		return m, nil
+	case "enter":
+		value := strings.TrimSpace(m.input.Value())
+		if value == "" {
+			m.err = errors.New("a path is required")
+
+			return m, nil
+		}
+
+		if m.mode == modeInit {
+			return m, initCmd(value)
+		}
+
+		return m, addCmd(value)
+	case "tab":
+		if len(m.matches) == 0 {
+			return m, nil
+		}
+
+		lcp := pathfield.LongestCommonPrefix(m.matches)
+		if len(lcp) > len(m.input.Value()) {
+			m.input.SetValue(lcp)
+			m.input.CursorEnd()
+			m.refreshMatches()
+		}
+
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	m.refreshMatches()
+
+	return m, cmd
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.screen == screenEdit {
-		return m.handleEditKey(msg)
-	}
-	if m.screen == screenConfirmDefault {
-		return m.handleConfirmDefaultKey(msg)
+	if m.mode != modeList {
+		return m.handleInputKey(msg)
 	}
 
 	switch msg.String() {
 	case "ctrl+c", "q":
 		return m, tea.Quit
-	case "e":
-		start := m.root
-		if start == "" {
-			start = m.suggested
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "down", "j":
+		if m.cursor < len(m.paths)-1 {
+			m.cursor++
+		}
+	case "enter":
+		if len(m.paths) == 0 {
+			return m, nil
 		}
 
-		m.input.SetValue(start)
+		chosen := m.paths[m.cursor]
+		if err := tuistate.Save(chosen); err != nil {
+			m.err = err
+
+			return m, nil
+		}
+
+		m.active = chosen
+		m.err = nil
+		m.status = "active registry: " + chosen
+	case "i", "a":
+		m.mode = modeInit
+		if msg.String() == "a" {
+			m.mode = modeAdd
+		}
+
+		m.input.SetValue("")
 		m.input.CursorEnd()
+		m.refreshMatches()
 		m.status = ""
 		m.err = nil
-		m.screen = screenEdit
 
 		return m, m.input.Focus()
-	case "d":
-		dir, err := registry.SuggestedRegistryDir()
-		if err != nil {
-			m.err = err
-
-			return m, nil
-		}
-
-		m.pendingDefault = dir
-		m.status = ""
-		m.err = nil
-		m.screen = screenConfirmDefault
-	}
-
-	return m, nil
-}
-
-func (m Model) handleConfirmDefaultKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "y", "enter":
-		if err := registry.SetRegistryDir(m.pendingDefault); err != nil {
-			m.err = err
-			m.pendingDefault = ""
-			m.screen = screenView
-
-			return m, nil
-		}
-
-		m.root = m.pendingDefault
-		m.pendingDefault = ""
-		m.status = "registry set to the default location"
-		m.err = nil
-		m.screen = screenView
-	case "n", "esc":
-		m.pendingDefault = ""
-		m.screen = screenView
 	}
 
 	return m, nil
@@ -139,23 +245,20 @@ func (m Model) handleConfirmDefaultKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case dataMsg:
+	case listMsg:
 		m.loading = false
-		m.root = msg.root
-
-		return m, nil
-	case errMsg:
-		m.loading = false
-
-		if unset, ok := errors.AsType[*registry.NoRegistryError](msg.err); ok {
-			m.suggested = unset.Suggested
-
-			return m, nil
-		}
-
 		m.err = msg.err
+		m.paths = msg.paths
+		m.active = msg.active
+		m.cursor = min(m.cursor, max(0, len(m.paths)-1))
 
 		return m, nil
+	case doneMsg:
+		m.mode = modeList
+		m.err = msg.err
+		m.status = msg.status
+
+		return m, loadCmd()
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.scroller.Resize(m.width, m.height)
@@ -168,75 +271,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		prevScreen := m.screen
-
-		newModel, cmd := m.handleKey(msg)
-		if nm, ok := newModel.(Model); ok {
-			if nm.screen != prevScreen {
-				nm.scroller.GotoTop()
-			}
-
-			return nm, cmd
-		}
-
-		return newModel, cmd
+		return m.handleKey(msg)
 	}
 
 	return m, nil
 }
 
-func (m Model) handleEditKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.screen = screenView
-		m.err = nil
+func (m Model) writeInputAndMatches(b *strings.Builder) {
+	b.WriteString(m.input.View())
+	b.WriteString("\n")
 
-		return m, nil
-	case "ctrl+w":
-		path := strings.TrimSpace(m.input.Value())
-		if path == "" {
-			m.err = fmt.Errorf("registry directory is required")
+	const shown = 8
+	for i, match := range m.matches {
+		if i == shown {
+			b.WriteString(dimStyle.Render(fmt.Sprintf("  … %d more", len(m.matches)-shown)))
+			b.WriteString("\n")
 
-			return m, nil
+			break
 		}
 
-		abs, err := filepath.Abs(path)
-		if err != nil {
-			m.err = err
-
-			return m, nil
-		}
-
-		if err := registry.SetRegistryDir(abs); err != nil {
-			m.err = err
-
-			return m, nil
-		}
-
-		m.root = abs
-		m.status = "saved"
-		m.err = nil
-		m.screen = screenView
-
-		return m, nil
+		b.WriteString(dimStyle.Render("  " + match))
+		b.WriteString("\n")
 	}
-
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-
-	return m, cmd
 }
 
 func (m Model) parts() (header, body, footer string) {
-	header = headerStyle.Render("Pi Agent Lab — Config")
+	header = headerStyle.Render("Pi Agent Lab — Registries")
 
 	var b strings.Builder
-
-	if m.loading {
-		b.WriteString("loading...\n")
-
-		return header, b.String(), ""
-	}
 
 	if m.err != nil {
 		b.WriteString(errStyle.Width(m.width).Render(fmt.Sprintf("error: %v", m.err)))
@@ -247,45 +309,64 @@ func (m Model) parts() (header, body, footer string) {
 		b.WriteString("\n\n")
 	}
 
-	if m.screen == screenEdit {
-		b.WriteString("Registry Directory:\n")
-		b.WriteString(m.input.View())
+	switch m.mode {
+	case modeInit:
+		b.WriteString("Create a registry at this path (an existing directory is adopted).\n")
+		b.WriteString(dimStyle.Width(m.width).Render("Relative paths start from your home directory."))
 		b.WriteString("\n\n")
-		b.WriteString(dimStyle.Width(m.width).Render("persisted to ~/.config/pi-agent-lab/config.json"))
+		m.writeInputAndMatches(&b)
 
-		return header, b.String(), "ctrl+w save  esc cancel"
+		return header, b.String(), "enter init  tab complete  esc cancel"
+	case modeAdd:
+		b.WriteString("Register the existing registry at this path.\n")
+		b.WriteString(dimStyle.Width(m.width).Render("Relative paths start from your home directory."))
+		b.WriteString("\n\n")
+		m.writeInputAndMatches(&b)
+
+		return header, b.String(), "enter add  tab complete  esc cancel"
 	}
 
-	if m.screen == screenConfirmDefault {
-		b.WriteString("Set registry directory to the default location?\n\n")
-		b.WriteString(theme.Wrap(m.width, m.pendingDefault))
+	if m.loading {
+		b.WriteString("loading...\n")
 
-		return header, b.String(), "y confirm  n/esc cancel"
+		return header, b.String(), ""
 	}
 
-	if m.root == "" {
-		b.WriteString(attentionStyle.Width(m.width).Render("No registry directory is set."))
-		b.WriteString(theme.Wrap(m.width, "\n\nChoose where your agents and tasks are stored. Nothing works until you do.\n"))
-		if m.suggested != "" {
-			b.WriteString("\nSuggested location:\n")
-			b.WriteString(theme.Wrap(m.width, m.suggested))
-			b.WriteString("\n")
+	if len(m.paths) == 0 {
+		b.WriteString(attentionStyle.Width(m.width).Render("No registries registered yet."))
+		b.WriteString("\n")
+
+		return header, b.String(), "i init a new registry  a add an existing one  q quit  ctrl+u/ctrl+d scroll"
+	}
+
+	for i, p := range m.paths {
+		marker := " "
+		if p == m.active {
+			marker = "*"
 		}
 
-		return header, b.String(), "e choose a directory  d use the suggested location  q quit"
+		name, status := "-", "ok"
+		if mf, err := registry.ReadManifest(p); err != nil {
+			status = "missing or invalid manifest"
+		} else {
+			name = mf.Name
+		}
+
+		line := fmt.Sprintf("%s %s  %s  (%s)", marker, name, p, status)
+		if i == m.cursor {
+			b.WriteString(selectedStyle.Render("> " + line))
+		} else {
+			b.WriteString("  ")
+			b.WriteString(line)
+		}
+		b.WriteString("\n")
 	}
 
-	b.WriteString("Registry Directory:\n")
-	b.WriteString(theme.Wrap(m.width, m.root))
-
-	return header, b.String(), "e edit  d use the default location  q quit  ctrl+u/ctrl+d scroll"
+	return header, b.String(), "j/k move  enter set active (*)  i init  a add  q quit  ctrl+u/ctrl+d scroll"
 }
 
 func (m Model) View() string {
 	header, body, footer := m.parts()
-	if footer == "" {
-		return m.scroller.Render(header, body)
-	}
 
 	return m.scroller.RenderWithFooter(header, body, footer)
 }

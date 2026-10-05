@@ -5,7 +5,9 @@ go 1.26.5
 replace github.com/darkokos/pi-agent-framework/pi-session-schema => ../pi-session-schema
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/darkokos/pi-agent-framework/pi-session-schema v0.0.0-00010101000000-000000000000
+	github.com/google/uuid v1.6.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 )
 

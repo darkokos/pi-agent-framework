@@ -45,18 +45,21 @@ cd herdr-pi-agent-lab/
 
 ## Registry setup
 
-Before anything else, tell `pi-agent-lab` where to keep its data:
+A registry is a directory with a manifest file, `pi-agent-lab.toml`, at its root. Create one, or register one that already exists:
 
 ```sh
-pi-agent-lab config default          # use the suggested location, after a y/n confirmation
-# or
-pi-agent-lab config update /path/to/registry
-pi-agent-lab config show             # print the resolved path
+pi-agent-lab registry init ./my-registry        # write a manifest here and register it
+pi-agent-lab registry add /path/to/registry     # register an existing registry (e.g. a git checkout)
+pi-agent-lab registry list                      # show registered registries and their status
 ```
 
-Or use the Config section in the Herdr plugin.
+`registry init` adopts any agents and tasks already in the directory. `registry add` refuses a directory without a valid manifest, and refuses a second copy of a registry it already has (the manifest's `id` identifies the registry across clones).
 
-This is stored in `$XDG_CONFIG_HOME/pi-agent-lab/config.json` (default `~/.config/pi-agent-lab/config.json`) and points at a registry directory (suggested default: `$XDG_DATA_HOME/pi-agent-lab/registry`, i.e. `~/.local/share/pi-agent-lab/registry`). **Nothing else works until this is set**. Every command that needs it will tell you so and name the exact fix.
+The list of registered registries is stored in `$XDG_CONFIG_HOME/pi-agent-lab/config.json` (default `~/.config/pi-agent-lab/config.json`).
+
+The CLI always works on the **current directory**, which must be a registry. Run `pi-agent-lab` from inside a registry, or it will say that the directory isn't one.
+
+The Herdr plugin keeps its own choice of registry, separate from this file. Pick one in its Registries pane. That choice is stored in the plugin's config directory and is not used by the CLI.
 
 **Registry objects are immutable.** There is no `update` command for an agent, version, or task. Once created, the only way to change one is to delete it and recreate it. This keeps a version's identity meaningful: if you could edit `code-reviewer@2.0.0` in place, two runs tagged with that same version ID could have silently been produced by completely different agents.
 
@@ -158,7 +161,7 @@ pi-agent-lab show     agent | agent-version | task
 pi-agent-lab list     agents | agent-versions | tasks | runs
 pi-agent-lab delete   agent | agent-version | task
 pi-agent-lab invocation <agent>@<version> <task>
-pi-agent-lab config    default | update <dir> | show
+pi-agent-lab registry  init [path] | add <path> | list
 ```
 
 - `show agent-version` keeps its output compact by default (extensions/skills as name lists only) - pass `--skill <name>` (repeatable) to also print one skill's full rendered content. `show agent-version`/`show task` render the system prompt / task prompt as real terminal markdown (via [glamour](https://github.com/charmbracelet/glamour)), not raw `#`/`*` characters.
@@ -181,7 +184,7 @@ Five panes, each its own binary under `bin/`:
 | Agents & Tasks | `registry` | Create/delete agents, versions, and tasks; browse an agent version's full details (system prompt, tools, extensions, skills - each skill's content expandable on demand so a long one doesn't flood the screen). |
 | Start a run    | `run`      | Pick an agent version and a task, review the exact command, confirm, run.                                                                                                                                        |
 | Review Runs    | `compare`  | The ranked comparison from `list runs`, plus resuming an unrated session straight into `/rate`.                                                                                                                  |
-| Config         | `config`   | Same as `config update`/`config default`/`config show`, interactively - the default-location action asks for `y`/`n` confirmation before writing anything.                                                       |
+| Registries     | `config`   | Lists registered registries. Enter selects one as the registry the TUI panes use (stored in the plugin config, not the shared config). `i` inits a new registry at a typed path; `a` adds an existing one.       |
 
 ### Keybindings
 

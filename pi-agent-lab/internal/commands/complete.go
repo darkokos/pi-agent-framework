@@ -91,7 +91,7 @@ func completeExtensionSources(_ *cobra.Command, _ []string, toComplete string) (
 		}
 	}
 
-	hint := "or start with ./ or ../ to complete a path relative to the registry directory (the one from `pi-agent-lab config show`)"
+	hint := "or start with ./ or ../ to complete a path relative to the registry directory (the current directory)"
 	if root, err := registry.ResolveRoot(); err == nil {
 		hint = "or start with ./ or ../ to complete a path relative to the registry directory (" + root + ")"
 	}

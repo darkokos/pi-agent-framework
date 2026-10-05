@@ -16,7 +16,6 @@ var (
 	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
 	errStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	okStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	helpStyle     = theme.Help
 )
 
 type item struct {
@@ -43,7 +42,7 @@ var items = []item{
 	{"Start a run", "Pick an agent version and a task, then run it", "run"},
 	{"Agents & Tasks", "Create and delete your agents, their versions, and tasks", "registry"},
 	{"Review Runs", "See how each agent version did on a task, and rate unrated runs", "compare"},
-	{"Config", "Choose where your agents and tasks are stored", "config"},
+	{"Registries", "Pick the registry these panes work on, or init/add one", "config"},
 }
 
 func NewModel() Model { return Model{} }

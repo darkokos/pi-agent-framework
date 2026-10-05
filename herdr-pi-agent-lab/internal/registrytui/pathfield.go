@@ -7,73 +7,30 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
+
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/pathfield"
 )
 
-func splitPath(text string) (dir, base string) {
-	i := strings.LastIndex(text, "/")
+func splitPath(text string) (dir, base string) { return pathfield.SplitPath(text) }
 
-	return text[:i+1], text[i+1:]
-}
+func isExplicitPath(p string) bool { return pathfield.IsExplicit(p) }
 
-func isExplicitPath(p string) bool {
-	return p == "~" || strings.HasPrefix(p, "~/") || filepath.IsAbs(p)
-}
-
-func resolvePath(p string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return p
-	}
-
-	switch {
-	case p == "~":
-		return home
-	case strings.HasPrefix(p, "~/"):
-		return filepath.Join(home, p[2:])
-	default:
-		return p
-	}
-}
+func resolvePath(p string) string { return pathfield.Resolve(p) }
 
 func pathMatches(text string) []string {
-	if !isExplicitPath(text) || text == "~" {
+	dir, _ := splitPath(text)
+
+	matches := pathfield.Matches(text, false)
+	if matches == nil {
 		return nil
 	}
 
-	dir, base := splitPath(text)
-
-	listDir := resolvePath(dir)
-
-	entries, err := os.ReadDir(listDir)
-	if err != nil {
-		return nil
+	names := make([]string, 0, len(matches))
+	for _, m := range matches {
+		names = append(names, strings.TrimPrefix(m, dir))
 	}
 
-	var dirs, files []string
-	for _, e := range entries {
-		name := e.Name()
-		if !strings.HasPrefix(name, base) {
-			continue
-		}
-		if strings.HasPrefix(name, ".") && !strings.HasPrefix(base, ".") {
-			continue
-		}
-
-		isDir := e.IsDir()
-		if e.Type()&os.ModeSymlink != 0 {
-			if st, err := os.Stat(filepath.Join(listDir, name)); err == nil && st.IsDir() {
-				isDir = true
-			}
-		}
-
-		if isDir {
-			dirs = append(dirs, name+"/")
-		} else {
-			files = append(files, name)
-		}
-	}
-
-	return append(dirs, files...)
+	return names
 }
 
 func pathBrowseMatches(relBase, query string) []string {
@@ -138,20 +95,7 @@ func pathBrowseMatches(relBase, query string) []string {
 	return append(dirs, files...)
 }
 
-func longestCommonPrefix(names []string) string {
-	if len(names) == 0 {
-		return ""
-	}
-
-	prefix := names[0]
-	for _, n := range names[1:] {
-		for !strings.HasPrefix(n, prefix) {
-			prefix = prefix[:len(prefix)-1]
-		}
-	}
-
-	return prefix
-}
+func longestCommonPrefix(names []string) string { return pathfield.LongestCommonPrefix(names) }
 
 func pathKind(text string) string {
 	if !isExplicitPath(text) {

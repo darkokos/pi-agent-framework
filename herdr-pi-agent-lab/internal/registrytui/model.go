@@ -11,6 +11,7 @@ import (
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/runflow"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/scroll"
 	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/theme"
+	"github.com/darkokos/pi-agent-framework/herdr-pi-agent-lab/internal/tuistate"
 	registry "github.com/darkokos/pi-agent-framework/pi-agent-registry"
 )
 
@@ -112,7 +113,7 @@ func tick() tea.Cmd {
 
 func loadData() tea.Cmd {
 	return func() tea.Msg {
-		root, err := registry.ResolveRoot()
+		root, err := tuistate.ActiveRoot()
 		if err != nil {
 			return errMsg{err}
 		}
