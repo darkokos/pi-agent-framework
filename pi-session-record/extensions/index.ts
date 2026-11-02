@@ -33,7 +33,7 @@ type Rating = Omit<
 > &
   Required<Pick<SessionRecord["outcome"], "outcome" | "ratedAt" | "source">>;
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const RECORD_DIR =
   process.env.PI_SESSION_RECORDS ?? join(homedir(), ".pi", "agent", "records");
 
@@ -104,6 +104,19 @@ export default function (pi: ExtensionAPI) {
     } satisfies Rating);
   }
 
+  function lastText(message: any): string | undefined {
+    if (!Array.isArray(message.content)) return undefined;
+
+    const texts = message.content
+      .filter(
+        (block: any) =>
+          block?.type === "text" && typeof block.text === "string",
+      )
+      .map((block: any) => block.text as string);
+
+    return texts.length ? texts.join("") : undefined;
+  }
+
   function findRating(ctx: ExtensionContext): Rating | undefined {
     let found: Rating | undefined;
     for (const entry of ctx.sessionManager.getEntries() as any[]) {
@@ -132,6 +145,7 @@ export default function (pi: ExtensionAPI) {
 
       agentVersion: process.env.PI_AGENT_VERSION ?? null,
       taskId: process.env.PI_TASK_ID ?? null,
+      finalResponse: null,
 
       models: [],
 
@@ -190,6 +204,9 @@ export default function (pi: ExtensionAPI) {
         record.activity.byTool[name] = (record.activity.byTool[name] ?? 0) + 1;
       } else if (message.role === "assistant") {
         record.activity.assistantMessages += 1;
+
+        const text = lastText(message);
+        if (text !== undefined) record.finalResponse = text;
 
         const key =
           message.provider && message.model

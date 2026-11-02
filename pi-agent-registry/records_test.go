@@ -53,7 +53,20 @@ func TestRecordSchema_RunIdIsVersionDependent(t *testing.T) {
 		t.Error("a version 2 record must not carry runId")
 	}
 
-	if valid(baseRecord(3)) {
+	v3 := baseRecord(3)
+	if valid(v3) {
+		t.Error("a version 3 record without finalResponse must be invalid")
+	}
+	v3["finalResponse"] = nil
+	if !valid(v3) {
+		t.Error("a version 3 record with finalResponse (even null) must be valid")
+	}
+	v3["finalResponse"] = "the answer"
+	if !valid(v3) {
+		t.Error("a version 3 record with a finalResponse string must be valid")
+	}
+
+	if valid(baseRecord(4)) {
 		t.Error("an unknown schema version must be rejected")
 	}
 }

@@ -93,7 +93,7 @@ func loadData(overrideRoot *string) tea.Cmd {
 			return errMsg{err}
 		}
 
-		records, err := registry.ListRecords()
+		records, err := registry.ListRecords(root)
 		if err != nil {
 			return errMsg{err}
 		}

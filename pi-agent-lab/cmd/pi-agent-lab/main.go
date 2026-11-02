@@ -20,6 +20,7 @@ func main() {
 	root.AddCommand(commands.NewShowCommand())
 	root.AddCommand(commands.NewDeleteCommand())
 	root.AddCommand(commands.NewInvocationCommand())
+	root.AddCommand(commands.NewExportCommand())
 	root.AddCommand(commands.NewRegistryCommand())
 
 	if err := root.Execute(); err != nil {

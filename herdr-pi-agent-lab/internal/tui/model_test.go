@@ -23,9 +23,10 @@ func writeJSONFile(t *testing.T, path string, v any) {
 
 func TestLoadData_AssociatesGroupsWithRegisteredTasks(t *testing.T) {
 	registryDir := t.TempDir()
-	recordsDir := t.TempDir()
-
-	t.Setenv("PI_SESSION_RECORDS", recordsDir)
+	recordsDir := filepath.Join(registryDir, "records")
+	if err := os.MkdirAll(recordsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	tasksDir := filepath.Join(registryDir, "tasks")
 	if err := os.MkdirAll(tasksDir, 0o755); err != nil {
@@ -78,9 +79,10 @@ func TestLoadData_AssociatesGroupsWithRegisteredTasks(t *testing.T) {
 
 func TestResume_SelectsUnratedRunAndBuildsCommand(t *testing.T) {
 	registryDir := t.TempDir()
-	recordsDir := t.TempDir()
-
-	t.Setenv("PI_SESSION_RECORDS", recordsDir)
+	recordsDir := filepath.Join(registryDir, "records")
+	if err := os.MkdirAll(recordsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := os.MkdirAll(filepath.Join(registryDir, "tasks"), 0o755); err != nil {
 		t.Fatal(err)

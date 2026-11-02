@@ -19,17 +19,28 @@
     "activity",
     "outcome"
   ],
-  "if": {
-    "properties": { "schemaVersion": { "const": 1 } },
-    "required": ["schemaVersion"]
-  },
-  "then": { "required": ["runId"] },
-  "else": { "properties": { "runId": false } },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schemaVersion": { "const": 1 } },
+        "required": ["schemaVersion"]
+      },
+      "then": { "required": ["runId"] },
+      "else": { "properties": { "runId": false } }
+    },
+    {
+      "if": {
+        "properties": { "schemaVersion": { "const": 3 } },
+        "required": ["schemaVersion"]
+      },
+      "then": { "required": ["finalResponse"] }
+    }
+  ],
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "enum": [1, 2],
-      "description": "Bump this and the schema together when the shape changes; never widen silently. 1: original shape, runId required. 2: runId removed; a run is identified by sessionId."
+      "enum": [1, 2, 3],
+      "description": "Bump this and the schema together when the shape changes; never widen silently. 1: original shape, runId required. 2: runId removed; a run is identified by sessionId. 3: finalResponse added, capturing the last assistant text reply; required from this version on."
     },
     "sessionId": { "type": "string" },
     "sessionFile": { "type": "string" },
@@ -50,6 +61,10 @@
       "type": ["string", "null"],
       "deprecated": true,
       "description": "Only present in schemaVersion 1 records, where it is required. Removed in version 2: a run is identified by sessionId."
+    },
+    "finalResponse": {
+      "type": ["string", "null"],
+      "description": "The text of the last assistant message's text content block, captured at session_shutdown. Null if the session produced no assistant text (e.g. it ended before any response, or every assistant turn was tool-calls/thinking only). Required from schemaVersion 3 on."
     },
     "models": {
       "type": "array",

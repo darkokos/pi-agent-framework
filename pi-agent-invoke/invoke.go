@@ -49,6 +49,7 @@ func BuildInvocation(root, agentID, versionID, taskID, systemPrompt, taskPromptP
 		`id=$(uuidgen) &&`,
 		"PI_AGENT_VERSION=" + shellQuote(agentID+"@"+versionID),
 		"PI_TASK_ID=" + shellQuote(taskID),
+		"PI_SESSION_RECORDS=" + shellQuote(registry.RecordsDir(root)),
 		"pi",
 		"--session-id", `"$id"`,
 		"--model", shellQuote(version.Model),

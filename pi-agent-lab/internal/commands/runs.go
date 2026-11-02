@@ -70,18 +70,18 @@ func newListRunsCommand() *cobra.Command {
 		Short: "List recorded runs, ranked by rating",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if taskID != "" {
-				root, err := registry.ResolveRoot()
-				if err != nil {
-					return err
-				}
+			root, err := registry.ResolveRoot()
+			if err != nil {
+				return err
+			}
 
+			if taskID != "" {
 				if _, err := registry.GetTask(root, taskID); err != nil {
 					return err
 				}
 			}
 
-			records, err := registry.ListRecords()
+			records, err := registry.ListRecords(root)
 			if err != nil {
 				return err
 			}

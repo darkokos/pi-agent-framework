@@ -12,16 +12,16 @@ This allows you to actually compare "code-reviewer v1" against "code-reviewer v2
 
 ## Structure
 
-| Piece                                      | What it is                                                                                                                                                                                                                                                                        |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`pi-session-record`](pi-session-record)   | A Pi extension (TypeScript/Node) that writes one JSON record per session to `~/.pi/agent/records/<sessionId>.json`. Usage stats, tool activity, and an optional `/rate` outcome. It reads `PI_AGENT_VERSION`/`PI_TASK_ID` from the environment so records can be grouped by task. |
-| [`pi-session-schema`](pi-session-schema)   | The JSON Schema for a session record. Everything else derives its type from this.                                                                                                                                                                                                 |
-| [`pi-agent-registry`](pi-agent-registry)   | Reads/writes the on-disk registry of agents, versions, and tasks (plain JSON + Markdown files, git-friendly).                                                                                                                                                                     |
-| [`pi-agent-validate`](pi-agent-validate)   | Validates model IDs (via `pi --list-models`), tool names, extension/skill source strings, and thinking levels.                                                                                                                                                                    |
-| [`pi-agent-invoke`](pi-agent-invoke)       | Builds the exact `pi ...` shell command for a given agent version + task, or for resuming a past session.                                                                                                                                                                         |
-| [`pi-agent-compare`](pi-agent-compare)     | Groups recorded runs by task and ranks the rated ones (outcome, then rework, then autonomy; all higher-is-better, cost only breaks a full tie).                                                                                                                                   |
-| [`pi-agent-lab`](pi-agent-lab)             | The CLI. Everything above, wired into CRUD commands.                                                                                                                                                                                                                              |
-| [`herdr-pi-agent-lab`](herdr-pi-agent-lab) | A Herdr plugin: Bubble Tea TUI panes that drive the same registry and comparison logic.                                                                                                                                                                                           |
+| Piece                                      | What it is                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`pi-session-record`](pi-session-record)   | A Pi extension (TypeScript/Node) that writes one JSON record per session to `<PI_SESSION_RECORDS>/<sessionId>.json`, defaulting to `~/.pi/agent/records` when that env var isn't set. Usage stats, tool activity, and an optional `/rate` outcome. It reads `PI_AGENT_VERSION`/`PI_TASK_ID` from the environment so records can be grouped by task. |
+| [`pi-session-schema`](pi-session-schema)   | The JSON Schema for a session record. Everything else derives its type from this.                                                                                                                                                                                                                                                                   |
+| [`pi-agent-registry`](pi-agent-registry)   | Reads/writes the on-disk registry of agents, versions, and tasks (plain JSON + Markdown files, git-friendly).                                                                                                                                                                                                                                       |
+| [`pi-agent-validate`](pi-agent-validate)   | Validates model IDs (via `pi --list-models`), tool names, extension/skill source strings, and thinking levels.                                                                                                                                                                                                                                      |
+| [`pi-agent-invoke`](pi-agent-invoke)       | Builds the exact `pi ...` shell command for a given agent version + task, or for resuming a past session.                                                                                                                                                                                                                                           |
+| [`pi-agent-compare`](pi-agent-compare)     | Groups recorded runs by task and ranks the rated ones (outcome, then rework, then autonomy; all higher-is-better, cost only breaks a full tie).                                                                                                                                                                                                     |
+| [`pi-agent-lab`](pi-agent-lab)             | The CLI. Everything above, wired into CRUD commands.                                                                                                                                                                                                                                                                                                |
+| [`herdr-pi-agent-lab`](herdr-pi-agent-lab) | A Herdr plugin: Bubble Tea TUI panes that drive the same registry and comparison logic.                                                                                                                                                                                                                                                             |
 
 The CLI and the TUI are two interfaces over the same on-disk registry.
 
@@ -127,13 +127,13 @@ A version's identity is everything that affects agent _behavior_: model, provide
 `pi-agent-lab invocation <agent>@<version> <task>` (and the TUI's "Start a run") build a command shaped like:
 
 ```sh
-id=$(uuidgen) && PI_AGENT_VERSION='code-reviewer@1.0.0' PI_TASK_ID='review-auth-pr' pi --session-id "$id" \
+id=$(uuidgen) && PI_AGENT_VERSION='code-reviewer@1.0.0' PI_TASK_ID='review-auth-pr' PI_SESSION_RECORDS='/path/to/registry/records' pi --session-id "$id" \
   --model 'claude-sonnet-5' --provider 'opencode' --thinking 'medium' \
   --tools 'read,grep,find,ls' \
   --system-prompt '...' '@/path/to/registry/tasks/review-auth-pr.prompt.md'
 ```
 
-`PI_AGENT_VERSION` and `PI_TASK_ID` are what let `pi-session-record` tag the resulting record so it can be grouped and compared later. This is the whole mechanism, there's no separate "run tracking" database.
+`PI_AGENT_VERSION` and `PI_TASK_ID` are what let `pi-session-record` tag the resulting record so it can be grouped and compared later. `PI_SESSION_RECORDS` is always set to `<registry>/records` by `pi-agent-lab` itself, so a run started through it always persists its record into the registry it ran from. There's no env var escape hatch for runs started this way. (`PI_SESSION_RECORDS` works as a manual override for `pi-session-record` used outside of `pi-agent-lab`.)
 
 #### Rating a run
 
@@ -153,6 +153,30 @@ pi-agent-lab list runs --task review-auth-pr
 
 Rated runs for a task are ranked by **outcome, then rework, then autonomy** (lexicographically, all higher-is-better), never collapsed into one weighted score, since deciding how to weight them isn't this tool's call to make. Runs still tied on all three are then differentiated only by cost as a last resort. Token cost, total tokens, tool errors, and duration are always shown as independent stats - a cheaper run that hit more tool errors isn't automatically "better."
 
+#### Exporting a run
+
+```sh
+pi-agent-lab export <session-id> <dest>
+```
+
+Bundles a finished run into `<dest>`:
+
+```
+<dest>/
+  session-record.json      # exact copy of the registry's record for this session
+  response.md               # the record's finalResponse, as its own file (omitted if there isn't one)
+  agent/
+    agent.json               # exact copy
+    version.json             # exact copy
+    version.system.md        # exact copy
+    skills/                  # exact copy (omitted if the version has none)
+  task/
+    task.json                # exact copy
+    task.prompt.md           # exact copy
+```
+
+Everything under `agent/` and `task/` is copied from the registry, not re-derived. The point is to hand someone the exact inputs and output of a run, portable outside the registry. It reads `agentVersion`/`taskId` off the record itself, so it only works for a session that was actually run through `pi-agent-lab` (one with those fields set). A record from bare Pi usage has nothing to look up and is rejected with an error.
+
 ## Other CLI commands
 
 ```
@@ -161,6 +185,7 @@ pi-agent-lab show     agent | agent-version | task
 pi-agent-lab list     agents | agent-versions | tasks | runs
 pi-agent-lab delete   agent | agent-version | task
 pi-agent-lab invocation <agent>@<version> <task>
+pi-agent-lab export <session-id> <dest>
 pi-agent-lab registry  init [path] | add <path> | list
 ```
 

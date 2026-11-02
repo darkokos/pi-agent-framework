@@ -213,6 +213,25 @@ func completeTaskIDs(_ *cobra.Command, _ []string, _ string) ([]string, cobra.Sh
 	return out, cobra.ShellCompDirectiveNoFileComp
 }
 
+func completeSessionIDs(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	root, err := registry.ResolveRoot()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	records, err := registry.ListRecords(root)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	var out []string
+	for _, r := range records {
+		out = append(out, r.SessionId)
+	}
+
+	return out, cobra.ShellCompDirectiveNoFileComp
+}
+
 func completeAgentIDCompoundPrefix(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if strings.Contains(toComplete, "@") {
 		return nil, cobra.ShellCompDirectiveNoFileComp

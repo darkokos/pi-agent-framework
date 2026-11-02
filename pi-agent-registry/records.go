@@ -12,17 +12,12 @@ import (
 	sessionrecord "github.com/darkokos/pi-agent-framework/pi-session-schema/go"
 )
 
-func recordsDir() (string, error) {
-	if v := os.Getenv("PI_SESSION_RECORDS"); v != "" {
-		return v, nil
-	}
+func RecordsDir(root string) string {
+	return filepath.Join(root, "records")
+}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(home, ".pi", "agent", "records"), nil
+func recordFile(root, sessionID string) string {
+	return filepath.Join(RecordsDir(root), sessionID+".json")
 }
 
 func recordSchema() (*jsonschema.Schema, error) {
@@ -39,11 +34,46 @@ func recordSchema() (*jsonschema.Schema, error) {
 	return c.Compile("session-record.schema.json")
 }
 
-func ListRecords() ([]*sessionrecord.SessionRecord, error) {
-	dir, err := recordsDir()
+func parseRecord(schema *jsonschema.Schema, data []byte) (*sessionrecord.SessionRecord, error) {
+	inst, err := jsonschema.UnmarshalJSON(strings.NewReader(string(data)))
 	if err != nil {
 		return nil, err
 	}
+	if err := schema.Validate(inst); err != nil {
+		return nil, err
+	}
+
+	var record sessionrecord.SessionRecord
+	if err := json.Unmarshal(data, &record); err != nil {
+		return nil, err
+	}
+
+	return &record, nil
+}
+
+func GetRecord(root, sessionID string) (*sessionrecord.SessionRecord, error) {
+	path := recordFile(root, sessionID)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("record %q not found: %w", sessionID, err)
+	}
+
+	schema, err := recordSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	record, err := parseRecord(schema, data)
+	if err != nil {
+		return nil, fmt.Errorf("record %q failed schema validation: %w", sessionID, err)
+	}
+
+	return record, nil
+}
+
+func ListRecords(root string) ([]*sessionrecord.SessionRecord, error) {
+	dir := RecordsDir(root)
 
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
@@ -70,21 +100,13 @@ func ListRecords() ([]*sessionrecord.SessionRecord, error) {
 			continue
 		}
 
-		inst, err := jsonschema.UnmarshalJSON(strings.NewReader(string(data)))
+		record, err := parseRecord(schema, data)
 		if err != nil {
-			continue
-		}
-		if err := schema.Validate(inst); err != nil {
 			fmt.Fprintf(os.Stderr, "skipping %s: %v\n", path, err)
 			continue
 		}
 
-		var record sessionrecord.SessionRecord
-		if err := json.Unmarshal(data, &record); err != nil {
-			continue
-		}
-
-		records = append(records, &record)
+		records = append(records, record)
 	}
 
 	return records, nil
